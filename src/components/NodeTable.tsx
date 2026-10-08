@@ -24,7 +24,7 @@ import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip';
 import { RegionFlag } from './RegionFlag';
 import { TagPill } from './TagPill';
 import { OfflineNodeState, OfflineTableCell } from './OfflineNodeState';
-import { parseTagList } from '@/lib/parseTags';
+import { buildTagChips } from '@/lib/parseTags';
 import dayjs from 'dayjs';
 
 interface NodeTableProps {
@@ -291,7 +291,7 @@ const MobileRow = memo(function MobileRow({ node, isLast, onOpen, t, isLoggedIn 
   const loadRatio = stats ? stats.load.load1 / cores : 0;
   const loadStatus = loadRatio >= 1.5 ? 'critical' : loadRatio >= 1 ? 'warning' : 'normal';
   const expiryStatus = getExpiryStatus(node.expired_at, node.expires_in);
-  const tagList = parseTagList(node.tags).sort((a, b) => (a.color ? 0 : 1) - (b.color ? 0 : 1));
+  const chipItems = buildTagChips(node.tags, node.public_remark);
 
   return (
     <div
@@ -316,25 +316,31 @@ const MobileRow = memo(function MobileRow({ node, isLast, onOpen, t, isLoggedIn 
             onClick={() => onOpen(node.uuid)}
           >{node.name}</button>
         </div>
-        {(node.group || tagList.length > 0 || node.hidden || expiryStatus) && (
+        {(node.group || chipItems.length > 0 || node.hidden || expiryStatus) && (
           <div className="flex flex-wrap items-center gap-1 ml-0 sm:ml-4">
             {node.group && (
               <span className="text-xxs font-mono text-primary/85 bg-primary/15 px-1.5 py-0.5 rounded-sm">
                 {node.group}
               </span>
             )}
-            {tagList.slice(0, 5).map((tag, i) => (
-              <TagPill key={i} label={tag.label} color={tag.color} size="xs" />
+            {chipItems.slice(0, 5).map((chip, i) => (
+              <TagPill
+                key={i}
+                label={chip.label}
+                color={chip.color}
+                size="xs"
+                className={chip.isRemark ? 'inline-block max-w-full truncate' : undefined}
+              />
             ))}
-            {tagList.length > 5 && (
+            {chipItems.length > 5 && (
               <Tooltip>
                 <TooltipTrigger asChild>
                   <span className="text-xxs font-mono text-muted-foreground/55 bg-muted/35 px-1.5 py-0.5 rounded-sm cursor-default">
-                    +{tagList.length - 5}
+                    +{chipItems.length - 5}
                   </span>
                 </TooltipTrigger>
                 <TooltipContent side="bottom" className="text-xs font-mono">
-                  {tagList.slice(5).map(t => t.label).join(', ')}
+                  {chipItems.slice(5).map(t => t.label).join(', ')}
                 </TooltipContent>
               </Tooltip>
             )}
@@ -487,7 +493,7 @@ export function NodeTable({ nodes }: NodeTableProps) {
       cell: ({ row }) => {
         const node = row.original;
         const expiryStatus = getExpiryStatus(node.expired_at, node.expires_in);
-        const tagList = parseTagList(node.tags).sort((a, b) => (a.color ? 0 : 1) - (b.color ? 0 : 1));
+        const chipItems = buildTagChips(node.tags, node.public_remark);
         const platformLine = [
           node.os,
           [node.virtualization, node.arch].filter(Boolean).join('/'),
@@ -508,25 +514,31 @@ export function NodeTable({ nodes }: NodeTableProps) {
             </div>
 
             {/* Row 2: group + tags + hidden + expiry */}
-            {(node.group || tagList.length > 0 || node.hidden || expiryStatus) && (
+            {(node.group || chipItems.length > 0 || node.hidden || expiryStatus) && (
               <div className="flex flex-wrap items-center gap-1">
                 {node.group && (
                   <span className="text-xxs font-mono text-primary/85 bg-primary/15 px-1.5 py-0.5 rounded-sm shrink-0">
                     {node.group}
                   </span>
                 )}
-                {tagList.slice(0, 3).map((tag, i) => (
-                  <TagPill key={i} label={tag.label} color={tag.color} size="xs" />
+                {chipItems.slice(0, 3).map((chip, i) => (
+                  <TagPill
+                    key={i}
+                    label={chip.label}
+                    color={chip.color}
+                    size="xs"
+                    className={chip.isRemark ? 'inline-block max-w-full truncate' : undefined}
+                  />
                 ))}
-                {tagList.length > 3 && (
+                {chipItems.length > 3 && (
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <span className="text-xxs font-mono text-muted-foreground/55 bg-muted/35 px-1.5 py-0.5 rounded-sm cursor-default shrink-0">
-                        +{tagList.length - 3}
+                        +{chipItems.length - 3}
                       </span>
                     </TooltipTrigger>
                     <TooltipContent side="bottom" className="text-xs font-mono">
-                      {tagList.slice(3).map(t => t.label).join(', ')}
+                      {chipItems.slice(3).map(t => t.label).join(', ')}
                     </TooltipContent>
                   </Tooltip>
                 )}

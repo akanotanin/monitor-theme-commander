@@ -5,7 +5,7 @@ import { TagPill } from '@/components/TagPill';
 import { OfflineNodeState } from '@/components/OfflineNodeState';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 import { useAppConfig } from '@/hooks/useAppConfig';
-import { parseTagList } from '@/lib/parseTags';
+import { buildTagChips } from '@/lib/parseTags';
 import { SystemIcon } from '@/lib/systemIcon';
 import {
   formatSpeed,
@@ -49,10 +49,12 @@ export function NodeInfoPanel({ node }: { node: NodeWithStatus }) {
   const isFree = node.price === -1;
   const expiryStatus = getExpiryStatus(node.expired_at, node.expires_in);
   const hasTraffic = !!(node.traffic_limit && node.traffic_limit > 0 && node.traffic_limit_type && node.traffic_limit_type !== 'no_limit');
-  const tagList = parseTagList(node.tags);
+  /** 标签胶囊（Komari tags + 公开备注，与卡片 / 表格 / 侧栏同一口径） */
+  const tagChips = buildTagChips(node.tags, node.public_remark);
   const hasSystemTags = !!(node.group || node.hidden);
-  const shouldShowTagDivider = hasSystemTags && tagList.length > 0;
-  const hasTagStrip = hasSystemTags || tagList.length > 0 || !!node.region;
+  const allTagCount = tagChips.length;
+  const shouldShowTagDivider = hasSystemTags && allTagCount > 0;
+  const hasTagStrip = hasSystemTags || allTagCount > 0 || !!node.region;
   const priceLabel = isFree ? t('label.free') : node.price === 0 ? t('label.notSet') : `${node.currency}${node.price}`;
   const cores = node.cpu_cores || 1;
   const loadRatio = stats ? stats.load.load1 / cores : 0;
@@ -75,13 +77,17 @@ export function NodeInfoPanel({ node }: { node: NodeWithStatus }) {
             </span>
           )}
           {shouldShowTagDivider && <span className="mx-1 h-3 w-px bg-border/40" aria-hidden />}
-          {tagList.map((tag, i) => (
-            <TagPill key={i} label={tag.label} color={tag.color} size="sm" />
+          {tagChips.map((chip, i) => (
+            <TagPill
+              key={i}
+              label={chip.label}
+              color={chip.color}
+              size="sm"
+              className={chip.isRemark ? 'max-w-full break-words' : undefined}
+            />
           ))}
         </div>
       )}
-
-      <RemarkNote text={node.public_remark} variant="public" />
 
       {appConfig.isLoggedIn && <RemarkNote text={node.remark} variant="private" />}
 

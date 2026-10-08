@@ -14,7 +14,7 @@ import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip';
 import { RegionFlag } from './RegionFlag';
 import { TagPill } from './TagPill';
 import { OfflineNodeState } from './OfflineNodeState';
-import { parseTagList } from '@/lib/parseTags';
+import { buildTagChips } from '@/lib/parseTags';
 import dayjs from 'dayjs';
 
 interface NodeCardProps {
@@ -309,9 +309,12 @@ export const NodeCard = memo(function NodeCard({ node }: NodeCardProps) {
   const cpuSparkline = isOnline ? getCpuSparkline(node.uuid) : null;
   const navigate = useNavigate();
 
-  const tagList = useMemo(() => {
-    return parseTagList(node.tags).sort((a, b) => (a.color ? 0 : 1) - (b.color ? 0 : 1));
-  }, [node.tags]);
+  /**
+   * 标签行 = Komari tags（Monitor 上没有这个字段，恒为空）+ 公开备注拆出的标签，
+   * 与表格 / 地球侧栏 / 详情页共用 buildTagChips 同一口径；
+   * 最多展示 5 枚、多余的折进「+N」浮层。
+   */
+  const chipItems = useMemo(() => buildTagChips(node.tags, node.public_remark), [node.tags, node.public_remark]);
 
   const cpuUsage = stats?.cpu?.usage ?? 0;
   const ramUsage = stats ? (stats.ram.used / stats.ram.total) * 100 : 0;
@@ -383,18 +386,24 @@ export const NodeCard = memo(function NodeCard({ node }: NodeCardProps) {
                 {node.group}
               </span>
             )}
-            {tagList.slice(0, 5).map((tag, i) => (
-              <TagPill key={i} label={tag.label} color={tag.color} size="sm" />
+            {chipItems.slice(0, 5).map((tag, i) => (
+              <TagPill
+                key={i}
+                label={tag.label}
+                color={tag.color}
+                size="sm"
+                className={tag.isRemark ? 'inline-block max-w-full truncate' : undefined}
+              />
             ))}
-            {tagList.length > 5 && (
+            {chipItems.length > 5 && (
               <Tooltip>
                 <TooltipTrigger asChild>
                   <span className="text-xs font-mono text-muted-foreground/60 bg-muted/40 px-1.5 py-0.5 rounded-sm cursor-default">
-                    +{tagList.length - 5}
+                    +{chipItems.length - 5}
                   </span>
                 </TooltipTrigger>
                 <TooltipContent side="bottom" className="text-xs font-mono">
-                  {tagList.slice(5).map(t => t.label).join(', ')}
+                  {chipItems.slice(5).map(t => t.label).join(', ')}
                 </TooltipContent>
               </Tooltip>
             )}
@@ -451,11 +460,6 @@ export const NodeCard = memo(function NodeCard({ node }: NodeCardProps) {
                 {[node.cpu_name && `CPU: ${node.cpu_name} (${node.cpu_cores}C)`, node.os && `OS: ${node.os}`, node.arch && `Arch: ${node.arch}`, node.virtualization && `Virt: ${node.virtualization}`, node.kernel_version && `Kernel: ${node.kernel_version}`].filter(Boolean).join('\n')}
               </TooltipContent>
             </Tooltip>
-          )}
-          {node.public_remark && (
-            <p className="text-xs text-muted-foreground/70 ml-0 sm:ml-4 line-clamp-1 leading-relaxed">
-              {node.public_remark}
-            </p>
           )}
         </div>
       </div>
