@@ -4,7 +4,7 @@
   "description": "极简探针（Monitor）的赛博朋克指挥台风格主题，前身来自 wayjam/komari-theme-commander。",
   "version": "1.0.0",
   "author": "akanotanin / wayjam",
-  "url": "",
+  "url": "https://github.com/akanotanin/monitor-theme-commander",
   "config": [
     {
       "type": "title",
