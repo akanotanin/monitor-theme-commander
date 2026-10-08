@@ -10,8 +10,10 @@
 //   ④ 实时通道状态为「已连接」（/api/ws 帧在跑）
 //   ⑤ 卡片出现延迟读数（ms）—— ping 预热链路通了
 //   ⑥ 表格 / 可用性视图能切换并渲染
-//   ⑦ 点开节点详情页能渲染硬件面板与图表
+//   ⑦ 点开节点详情页能渲染硬件面板与图表（无历史序列显示「无历史数据」）
 //   ⑧ 390 宽无横向溢出、控制台无错误
+//   ⑨ 图表弹窗：网络页签画出速率曲线；负载/连接页签显示「无历史数据」
+//   ⑩ 私有备注（打桩登录态）渲染为带锁小卡片
 import { mkdirSync } from 'node:fs'
 import process from 'node:process'
 import { setTimeout as sleep } from 'node:timers/promises'
@@ -94,6 +96,44 @@ try {
   })()`)
   check('侧栏详情不显示分组', sideDetailGroup === 0, `实际 ${sideDetailGroup}`)
 
+  // ⑨ 图表弹窗（侧栏详情 → 「图表」按钮）：网络页签画速率曲线；负载/连接显示「无历史数据」
+  const chartsBtn = await session.evaluate(`(() => {
+    const b = [...document.querySelectorAll('button')].find(x => x.innerText.trim() === '图表')
+    if (!b) return false
+    b.click()
+    return true
+  })()`)
+  const modalUp = await session.waitFor(`!!document.querySelector('.chart-card-commander')`, 20000)
+  check('侧栏详情能打开图表弹窗', chartsBtn === true && modalUp === true)
+  const clickModalTab = label => session.evaluate(`(() => {
+    const b = [...document.querySelectorAll('.chart-card-commander button')].find(x => x.innerText.trim() === ${JSON.stringify(label)})
+    if (!b) return false
+    b.click()
+    return true
+  })()`)
+  check('弹窗能点「网络」页签', await clickModalTab('网络') === true)
+  const netDrawn = await session.waitFor(
+    `[...document.querySelectorAll('.chart-card-commander .recharts-surface path')].some(p => (p.getAttribute('d') || '').length > 100)`,
+    25000,
+  )
+  check('弹窗「网络」页签画出速率曲线', netDrawn === true)
+  await session.screenshot('shots/modal-network.png')
+  check('弹窗能点「负载」页签', await clickModalTab('负载') === true)
+  await sleep(600)
+  const loadEmpty = await session.evaluate(`document.querySelector('.chart-card-commander')?.innerText.includes('无历史数据') === true`)
+  check('弹窗「负载」页签显示「无历史数据」', loadEmpty === true)
+  await session.screenshot('shots/modal-load.png')
+  check('弹窗能点「连接」页签', await clickModalTab('连接') === true)
+  await sleep(600)
+  const connEmpty = await session.evaluate(`document.querySelector('.chart-card-commander')?.innerText.includes('无历史数据') === true`)
+  check('弹窗「连接」页签显示「无历史数据」', connEmpty === true)
+  await session.evaluate(`(() => {
+    const b = document.querySelector('.chart-card-commander button[aria-label="关闭"]')
+    if (b) { b.click(); return true }
+    return false
+  })()`)
+  await session.waitFor(`!document.querySelector('.chart-card-commander')`, 10000)
+
   // ② 卡片视图
   check('能点击「卡片」视图', await clickViewTab(session, '卡片') === true)
   const rendered = await session.waitFor(
@@ -171,9 +211,26 @@ try {
     25000,
   )
   check('图表画出了数据曲线', chartData === true)
+  // 滚到图表网格再拍，让截图里能看到各图表卡片
+  await session.evaluate(`(() => { const el = document.querySelector('.chart-card-commander'); if (el) { el.scrollIntoView({ block: 'start' }); return true } return false })()`)
   await sleep(600)
   await session.screenshot('shots/desktop-detail.png')
-  console.log('  已截图 shots/desktop-detail.png')
+  console.log('  已截图 shots/desktop-detail.png（实时档）')
+  // 切到历史档：Hub 不存的序列（负载/连接/进程）应给「无历史数据」提示而不是空网格
+  const switched = await session.evaluate(`(() => {
+    const b = [...document.querySelectorAll('button')].find(x => x.innerText.trim() === '1天')
+    if (!b) return false
+    b.click()
+    return true
+  })()`)
+  check('详情页能切到历史档（1天）', switched === true)
+  const noHistorySeen = await session.waitFor(`document.body.innerText.includes('无历史数据')`, 20000)
+  const noHistoryCount = await session.evaluate(`(document.body.innerText.match(/无历史数据/g) || []).length`)
+  check('历史档无序列的图表显示「无历史数据」', noHistorySeen === true && noHistoryCount >= 3, `实际 ${noHistoryCount} 处`)
+  await session.evaluate(`(() => { const el = document.querySelector('.chart-card-commander'); if (el) { el.scrollIntoView({ block: 'start' }); return true } return false })()`)
+  await sleep(400)
+  await session.screenshot('shots/desktop-detail-history.png')
+  console.log('  已截图 shots/desktop-detail-history.png（历史档）')
   await session.goto(`${BASE}/`)
   await session.waitFor(`document.querySelectorAll('.node-card-commander').length > 0`, 30000)
 
@@ -206,6 +263,60 @@ try {
 }
 finally {
   session.close()
+}
+
+// ⑩ 私有备注（登录管理员可见）：打桩登录态与节点备注，验证「带锁小卡片」版式
+{
+  const priv = await openSession({ width: 1440, height: 1000 })
+  try {
+    await priv.addInitScript(`(() => {
+      const origFetch = window.fetch.bind(window)
+      window.fetch = async (input, init) => {
+        const url = typeof input === 'string' ? input : (input && input.url) || ''
+        const res = await origFetch(input, init)
+        if (url.includes('/api/me')) {
+          const data = await res.clone().json().catch(() => ({}))
+          return new Response(JSON.stringify({ ...data, authed: true }), { status: 200, headers: { 'content-type': 'application/json' } })
+        }
+        if (url.includes('/api/nodes') && !url.includes('/api/nodes/') && !url.includes('/metrics')) {
+          const data = await res.clone().json().catch(() => null)
+          if (data && Array.isArray(data.nodes) && data.nodes[0]) {
+            data.nodes[0].remark = '仅管理员可见的测试备注'
+            data.admin = true
+          }
+          return new Response(JSON.stringify(data), { status: 200, headers: { 'content-type': 'application/json' } })
+        }
+        return res
+      }
+      // 实时帧不含私有备注、会把快照覆盖掉：这里让 ws 静默，主题自带 HTTP 轮询兜底
+      class SilentWS { close() {} addEventListener() {} removeEventListener() {} send() {} }
+      window.WebSocket = SilentWS
+    })()`)
+    await priv.goto(`${BASE}/`)
+    await priv.evaluate(`localStorage.setItem('komari-language','zh-Hans')`)
+    await priv.goto(`${BASE}/`)
+    await priv.waitFor(`document.querySelectorAll('.node-card-commander').length > 0 || !!document.querySelector('.globe-top-strip')`, 60000)
+    await priv.evaluate(`(() => { const b = [...document.querySelectorAll('button')].find(x => x.innerText.trim() === '卡片'); if (b) b.click(); return !!b })()`)
+    await priv.waitFor(`document.querySelectorAll('.node-card-commander').length > 0`, 30000)
+    await clickSelector(priv, '.node-card-commander .node-name')
+    await priv.waitFor(`!!document.querySelector('.node-info-panel')`, 20000)
+    const privInfo = JSON.parse(await priv.evaluate(`(() => {
+      const chips = [...document.querySelectorAll('.node-info-panel [data-private-remark]')]
+      return JSON.stringify({
+        count: chips.length,
+        texts: chips.map(c => (c.textContent || '').trim()),
+        locks: chips.filter(c => !!c.querySelector('svg')).length,
+        oldNote: document.querySelectorAll('.node-info-panel [role="note"]').length,
+      })
+    })()`))
+    check('私有备注渲染为带锁小卡片', privInfo.count >= 1 && privInfo.locks === privInfo.count && privInfo.texts.some(x => x.includes('仅管理员可见的测试备注')), JSON.stringify(privInfo))
+    check('私有备注旧便签框已移除', privInfo.oldNote === 0, `实际 ${privInfo.oldNote}`)
+    await priv.screenshot('shots/private-remark.png')
+    console.log('  已截图 shots/private-remark.png')
+  }
+  finally {
+    priv.close()
+  }
 }
 
 console.log(`\n${passed} PASS / ${failures.length} FAIL`)

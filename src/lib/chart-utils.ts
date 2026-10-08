@@ -68,7 +68,7 @@ export interface ChartDataPoint {
   time: string;
   cpu: number;
   ram: number;
-  swap: number;
+  swap?: number;
   disk: number;
   load: number;
   process: number;
@@ -113,10 +113,12 @@ export function transformLoadRecords(records: LoadRecord[]): ChartDataPoint[] {
       time: new Date(r.time).toISOString(),
       cpu: Math.min(Math.max(r.cpu || 0, 0), 100),
       ram: Math.min(Math.max(r.ram_total ? (r.ram / r.ram_total) * 100 : 0, 0), 100),
-      swap: Math.min(Math.max(r.swap_total ? (r.swap / r.swap_total) * 100 : 0, 0), 100),
+      // 交换分区：历史档没有 swap 序列（Hub 不存）——同样缺就是缺，不画贴 0 的假线
+      swap: r.swap_total ? Math.min(Math.max((r.swap / r.swap_total) * 100, 0), 100) : undefined,
       disk: Math.min(Math.max(r.disk_total ? (r.disk / r.disk_total) * 100 : 0, 0), 100),
       load: r.load,
-      process: r.process || 0,
+      // 缺就是缺（历史档没有进程数序列）——不要用 0 顶替，图表层会画成「无历史数据」而不是贴着 0 的假线
+      process: r.process,
       connections: r.connections,
       connections_udp: r.connections_udp,
       network_in: r.net_in / 1024,

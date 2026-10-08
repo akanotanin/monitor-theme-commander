@@ -136,6 +136,8 @@ export async function openSession(options = {}) {
         return true
       })()`)
     },
+    /** 在页面脚本执行前注入一段 JS（做 fetch 打桩等）——要在 goto 之前调用 */
+    addInitScript: source => send('Page.addScriptToEvaluateOnNewDocument', { source }),
     /** 截图；DPR=2 时得到的像素是视口的 2 倍 */
     async screenshot(path) {
       const shot = await send('Page.captureScreenshot', { format: 'png' })

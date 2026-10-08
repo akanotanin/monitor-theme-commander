@@ -6,6 +6,7 @@ export {
   ConnectionsLineChart,
   ProcessLineChart,
   NetworkTrafficAreaChart,
+  NetworkTrafficLineChart,
   PingLatencyLineChart,
   type MetricChartLayoutMode,
 } from './MetricCharts';

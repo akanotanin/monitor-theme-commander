@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { regionEmojiToCode } from './utils';
-import { buildTagChips, splitRemarkTags } from './parseTags';
+import { buildTagChips, splitPrivateRemarkTags, splitRemarkTags } from './parseTags';
 
 describe('regionEmojiToCode', () => {
   it('把旗帜 emoji 转成 ISO 3166-1 alpha-2 代码', () => {
@@ -40,6 +40,27 @@ describe('splitRemarkTags', () => {
     expect(splitRemarkTags('')).toEqual([]);
     expect(splitRemarkTags(null)).toEqual([]);
     expect(splitRemarkTags(undefined)).toEqual([]);
+  });
+});
+
+describe('splitPrivateRemarkTags', () => {
+  it('先按换行分段、段内再按逗号拆', () => {
+    expect(splitPrivateRemarkTags('东京 CN2 GIA\n晚高峰也稳,三网优化')).toEqual([
+      '东京 CN2 GIA',
+      '晚高峰也稳',
+      '三网优化',
+    ]);
+  });
+
+  it('跨行去重、容忍空行与首尾空白', () => {
+    expect(splitPrivateRemarkTags('重复\n重复')).toEqual(['重复']);
+    expect(splitPrivateRemarkTags('\n  \nA\n')).toEqual(['A']);
+  });
+
+  it('空值返回空数组', () => {
+    expect(splitPrivateRemarkTags(null)).toEqual([]);
+    expect(splitPrivateRemarkTags(undefined)).toEqual([]);
+    expect(splitPrivateRemarkTags('')).toEqual([]);
   });
 });
 

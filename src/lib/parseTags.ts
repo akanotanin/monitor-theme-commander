@@ -123,6 +123,24 @@ export function splitRemarkTags(remark: string | null | undefined): string[] {
   return out;
 }
 
+/**
+ * 私有备注拆标签：**先按换行分段、段内再按逗号拆**（站长常按行写多条，Hub 对它没有单行约束），
+ * 与公开备注（splitRemarkTags）同一套去空去重；详情页把它渲染成带锁小卡片。
+ */
+export function splitPrivateRemarkTags(remark: string | null | undefined): string[] {
+  if (!remark) return [];
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const line of remark.split(/\r?\n/)) {
+    for (const label of splitRemarkTags(line)) {
+      if (seen.has(label)) continue;
+      seen.add(label);
+      out.push(label);
+    }
+  }
+  return out;
+}
+
 export interface TagChip {
   label: string;
   color: TagColor | null;

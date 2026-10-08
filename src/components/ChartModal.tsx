@@ -13,6 +13,7 @@ import {
   DiskUsageLineChart,
   ConnectionsLineChart,
   NetworkTrafficAreaChart,
+  NetworkTrafficLineChart,
   PingLatencyLineChart,
 } from '@/components/metric-charts';
 import {
@@ -164,6 +165,9 @@ export function ChartModal({ nodeUuid, nodeName, onClose }: ChartModalProps) {
       case 'disk':
         return <DiskUsageLineChart chartData={chartData} mode="modal" containerClassName={modalChartClass} />;
       case 'network':
+        // 上游把「网络」与「连接」接成了同一张连接数图；Monitor 有网络历史、没有连接数历史，
+        // 这里改画上下行速率曲线，「连接」保持连接数图（历史档会显示「无历史数据」）。
+        return <NetworkTrafficLineChart chartData={chartData} mode="modal" containerClassName={modalChartClass} />;
       case 'connections':
         return <ConnectionsLineChart chartData={chartData} mode="modal" containerClassName={modalChartClass} />;
       case 'traffic':

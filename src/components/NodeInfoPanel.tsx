@@ -1,11 +1,10 @@
 import { CircularGauge } from '@/components/CircularGauge';
 import { OverflowTooltip } from '@/components/OverflowTooltip';
-import { RemarkNote } from '@/components/RemarkNote';
 import { TagPill } from '@/components/TagPill';
 import { OfflineNodeState } from '@/components/OfflineNodeState';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 import { useAppConfig } from '@/hooks/useAppConfig';
-import { buildTagChips } from '@/lib/parseTags';
+import { buildTagChips, splitPrivateRemarkTags } from '@/lib/parseTags';
 import { SystemIcon } from '@/lib/systemIcon';
 import {
   formatSpeed,
@@ -33,6 +32,7 @@ import {
   Calendar,
   Gauge,
   RefreshCw,
+  Lock,
 } from 'lucide-react';
 import dayjs from 'dayjs';
 import { Link } from 'react-router-dom';
@@ -51,10 +51,12 @@ export function NodeInfoPanel({ node }: { node: NodeWithStatus }) {
   const hasTraffic = !!(node.traffic_limit && node.traffic_limit > 0 && node.traffic_limit_type && node.traffic_limit_type !== 'no_limit');
   /** 标签胶囊（Komari tags + 公开备注，与卡片 / 表格 / 侧栏同一口径） */
   const tagChips = buildTagChips(node.tags, node.public_remark);
+  /** 私有备注（仅登录管理员可见）：拆成小卡片、带锁与描边，排在公开备注前（与 jikasei 同口径） */
+  const privateChips = appConfig.isLoggedIn ? splitPrivateRemarkTags(node.remark) : [];
   const hasSystemTags = !!(node.group || node.hidden);
   const allTagCount = tagChips.length;
-  const shouldShowTagDivider = hasSystemTags && allTagCount > 0;
-  const hasTagStrip = hasSystemTags || allTagCount > 0 || !!node.region;
+  const shouldShowTagDivider = hasSystemTags && allTagCount + privateChips.length > 0;
+  const hasTagStrip = hasSystemTags || allTagCount > 0 || privateChips.length > 0 || !!node.region;
   const priceLabel = isFree ? t('label.free') : node.price === 0 ? t('label.notSet') : `${node.currency}${node.price}`;
   const cores = node.cpu_cores || 1;
   const loadRatio = stats ? stats.load.load1 / cores : 0;
@@ -77,6 +79,17 @@ export function NodeInfoPanel({ node }: { node: NodeWithStatus }) {
             </span>
           )}
           {shouldShowTagDivider && <span className="mx-1 h-3 w-px bg-border/40" aria-hidden />}
+          {privateChips.map((text, i) => (
+            <span
+              key={`private-${i}`}
+              data-private-remark
+              title={t('label.privateRemarkTip', { text })}
+              className="inline-flex items-center gap-1 text-xs font-mono text-muted-foreground border border-border/60 px-1.5 py-0.5 rounded-sm max-w-full"
+            >
+              <Lock className="h-3 w-3 shrink-0" aria-hidden />
+              <span className="min-w-0 break-words">{text}</span>
+            </span>
+          ))}
           {tagChips.map((chip, i) => (
             <TagPill
               key={i}
@@ -88,8 +101,6 @@ export function NodeInfoPanel({ node }: { node: NodeWithStatus }) {
           ))}
         </div>
       )}
-
-      {appConfig.isLoggedIn && <RemarkNote text={node.remark} variant="private" />}
 
       {(node.cpu_name || node.gpu_name || node.os || node.arch) && (
         <div className="network-stats-panel telemetry-panel overflow-hidden">

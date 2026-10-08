@@ -123,6 +123,11 @@ export function SystemLoadLineChart({
     return <EmptyChart>{emptyContent ?? <span className="text-xs font-mono text-muted-foreground">{t('chart.noData')}</span>}</EmptyChart>;
   }
 
+  // 历史档没有负载序列（Hub 不存）——给「无历史数据」提示，不画一张空网格
+  if (!chartData.some(p => Number.isFinite(p.load))) {
+    return <EmptyChart>{emptyContent ?? <span className="text-xs font-mono text-muted-foreground">{t('chart.noHistory')}</span>}</EmptyChart>;
+  }
+
   return (
     <ChartContainer config={cfg} className={containerClassName}>
       <LineChart data={chartData} margin={margin}>
@@ -270,6 +275,11 @@ export function ConnectionsLineChart({
     return <EmptyChart>{emptyContent ?? <span className="text-xs font-mono text-muted-foreground">{t('chart.noData')}</span>}</EmptyChart>;
   }
 
+  // 历史档没有连接数序列（Hub 不存）——给提示，不画空网格
+  if (!chartData.some(p => Number.isFinite(p.connections) || Number.isFinite(p.connections_udp))) {
+    return <EmptyChart>{emptyContent ?? <span className="text-xs font-mono text-muted-foreground">{t('chart.noHistory')}</span>}</EmptyChart>;
+  }
+
   return (
     <ChartContainer config={cfg} className={containerClassName}>
       <LineChart data={chartData} margin={margin}>
@@ -320,6 +330,11 @@ export function ProcessLineChart({
 
   if (!chartData.length) {
     return <EmptyChart>{emptyContent ?? <span className="text-xs font-mono text-muted-foreground">{t('chart.noData')}</span>}</EmptyChart>;
+  }
+
+  // 历史档没有进程数序列（Hub 不存）——给提示，不画空网格
+  if (!chartData.some(p => Number.isFinite(p.process))) {
+    return <EmptyChart>{emptyContent ?? <span className="text-xs font-mono text-muted-foreground">{t('chart.noHistory')}</span>}</EmptyChart>;
   }
 
   return (
@@ -430,6 +445,93 @@ export function NetworkTrafficAreaChart({
           hide={!!hidden.network_out}
         />
       </AreaChart>
+    </ChartContainer>
+  );
+}
+
+/**
+ * 网络折线图：与 NetworkTrafficAreaChart 同一组序列（上下行速率），供弹窗的「网络」页签使用。
+ * 上游把「网络」与「连接」接成了同一张连接数图；Monitor 有网络历史、没有连接数历史，
+ * 所以这一支改画速率曲线（见 ChartModal 的映射与 README「与原版的差异」）。
+ */
+export function NetworkTrafficLineChart({
+  chartData,
+  mode,
+  isMobile = false,
+  containerClassName,
+  emptyContent,
+}: BaseProps) {
+  const { t } = useTranslation();
+  const [hidden, onLegendClick] = useSeriesLegendToggle();
+  const { margin, xAxisProps, yAxisConfig } = useMetricChartAxes(mode, chartData.length, isMobile);
+  const cfg = {
+    network_in: { label: t('label.in'), color: chartColors[6] },
+    network_out: { label: t('label.out'), color: chartColors[7] },
+  };
+
+  const trafficYAxis =
+    mode === 'modal'
+      ? {
+          tickLine: false,
+          axisLine: false,
+          unit: 'KB' as const,
+          tick: { fontSize: 10 },
+          width: 42,
+        }
+      : {
+          tickLine: false,
+          axisLine: false,
+          unit: 'KB/s' as const,
+          orientation: 'left' as const,
+          type: 'number' as const,
+          tick: { ...yAxisConfig.tick, dx: -5 },
+          width: isMobile ? 50 : 60,
+        };
+
+  if (!chartData.length) {
+    return <EmptyChart>{emptyContent ?? <span className="text-xs font-mono text-muted-foreground">{t('chart.noData')}</span>}</EmptyChart>;
+  }
+  // 历史档若整个窗口都没有网络序列，同样给提示而不是空网格
+  if (!chartData.some(p => Number.isFinite(p.network_in) || Number.isFinite(p.network_out))) {
+    return <EmptyChart>{emptyContent ?? <span className="text-xs font-mono text-muted-foreground">{t('chart.noHistory')}</span>}</EmptyChart>;
+  }
+
+  return (
+    <ChartContainer config={cfg} className={containerClassName}>
+      <LineChart data={chartData} margin={margin}>
+        <CartesianGrid vertical={false} stroke={gridStrokeColor} strokeOpacity={0.3} />
+        <XAxis {...xAxisProps} />
+        <YAxis {...trafficYAxis} />
+        <ChartTooltip
+          cursor={false}
+          formatter={(v: number | string) => `${typeof v === 'number' ? v.toFixed(1) : v} KB/s`}
+          content={<ChartTooltipContent labelFormatter={labelFormatter} indicator="dot" />}
+        />
+        <ChartLegend
+          content={<ChartLegendContent inactiveDataKeys={hidden} />}
+          onClick={onLegendClick}
+        />
+        <Line
+          dataKey="network_in"
+          name={t('label.in')}
+          stroke={chartColors[6]}
+          dot={false}
+          isAnimationActive={false}
+          strokeWidth={mode === 'modal' ? 1.5 : 2}
+          type="linear"
+          hide={!!hidden.network_in}
+        />
+        <Line
+          dataKey="network_out"
+          name={t('label.out')}
+          stroke={chartColors[7]}
+          dot={false}
+          isAnimationActive={false}
+          strokeWidth={mode === 'modal' ? 1.5 : 2}
+          type="linear"
+          hide={!!hidden.network_out}
+        />
+      </LineChart>
     </ChartContainer>
   );
 }
