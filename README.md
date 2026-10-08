@@ -1,6 +1,6 @@
 # Monitor Commander
 
-![Monitor Commander 主题预览](preview.png?v=1)
+![Monitor Commander 主题预览](preview.png?v=2)
 
 把 [wayjam/komari-theme-commander](https://github.com/wayjam/komari-theme-commander) 移植到
 [极简探针 Monitor](https://github.com/monitor-probe/monitor) 的主题：深空指挥台的 HUD 视觉，加上
