@@ -16,7 +16,7 @@ import dayjs from 'dayjs';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 import { TagPill } from './TagPill';
 import { OfflineNodeState } from './OfflineNodeState';
-import { parseTagList } from '@/lib/parseTags';
+import { buildTagChips, parseTagList } from '@/lib/parseTags';
 interface SidebarProps {
   nodes: NodeWithStatus[];
   loading?: boolean;
@@ -631,6 +631,8 @@ function NodeDetailView({
   const isOnline = node.status === 'online';
   const stats = isOnline ? node.stats : undefined;
   const { isLoggedIn } = useAppConfig();
+  // 侧栏详情显示备注标签（与详情页同一口径）；列表行不显示（见 NodeRowContentInner）
+  const chipItems = buildTagChips(node.tags, node.public_remark);
 
   const cpuUsage = stats?.cpu?.usage ?? 0;
   const ramUsage = stats ? (stats.ram.used / stats.ram.total) * 100 : 0;
@@ -725,16 +727,21 @@ function NodeDetailView({
               })()}
             </div>
           )}
-          {/* Tags — 列表行与侧栏详情都不放备注；备注只在详情页显示 */}
-          {node.tags && (() => {
-            const tagList = parseTagList(node.tags);
+          {/* Tags — Komari tags + 公开备注拆出的标签；列表行不显示备注，这里与详情页显示 */}
+          {chipItems.length > 0 && (() => {
             const maxTags = 5;
-            const visibleTags = tagList.slice(0, maxTags);
-            const hiddenCount = tagList.length - visibleTags.length;
-            return tagList.length > 0 ? (
+            const visibleTags = chipItems.slice(0, maxTags);
+            const hiddenCount = chipItems.length - visibleTags.length;
+            return (
               <div className="flex flex-wrap gap-1">
-                {visibleTags.map((tag, i) => (
-                  <TagPill key={i} label={tag.label} color={tag.color} size="sm" />
+                {visibleTags.map((chip, i) => (
+                  <TagPill
+                    key={i}
+                    label={chip.label}
+                    color={chip.color}
+                    size="sm"
+                    className={chip.isRemark ? 'truncate max-w-[12rem]' : undefined}
+                  />
                 ))}
                 {hiddenCount > 0 && (
                   <Tooltip>
@@ -744,12 +751,12 @@ function NodeDetailView({
                       </span>
                     </TooltipTrigger>
                     <TooltipContent side="bottom" className="text-xs font-mono">
-                      {tagList.slice(maxTags).map(t => t.label).join(', ')}
+                      {chipItems.slice(maxTags).map(t => t.label).join(', ')}
                     </TooltipContent>
                   </Tooltip>
                 )}
               </div>
-            ) : null;
+            );
           })()}
         </div>
       </div>
