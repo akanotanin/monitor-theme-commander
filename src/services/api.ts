@@ -51,6 +51,8 @@ export interface NodeData {
   ipv4?: string;
   ipv6?: string;
   remark?: string;
+  /** 距到期天数（按日历日计算），来自极简探针 Hub；null 表示未设置到期时间 */
+  expires_in?: number | null;
 }
 
 export interface MetricDefinition {
@@ -307,6 +309,7 @@ function adaptNodeData(uuid: string, client: RPC2NodeData): NodeData {
     ipv4: client.ipv4,
     ipv6: client.ipv6,
     remark: client.remark,
+    expires_in: client.expires_in,
   };
 }
 
@@ -319,8 +322,11 @@ function adaptStatusRecord(record: RPC2StatusRecord): NodeStats {
     swap: { total: record.swap_total || 0, used: record.swap || 0 },
     disk: { total: record.disk_total || 0, used: record.disk || 0 },
     network: {
-      up: record.net_in || 0,
-      down: record.net_out || 0,
+      // Komari 官方口径：net_in = 下行（Download）、net_out = 上行（Upload）
+      // （komari-web：net.in.rate → "Download"）。主题把 network.up 展示为「上行」，
+      // 这里显式对齐，保证「上行」显示的是上传速率。
+      up: record.net_out || 0,
+      down: record.net_in || 0,
       totalUp: record.net_total_up || 0,
       totalDown: record.net_total_down || 0,
     },
@@ -342,8 +348,9 @@ function adaptNodeStatus(status: RPC2NodeStatus): NodeStats {
     swap: { total: status.swap_total || 0, used: status.swap || 0 },
     disk: { total: status.disk_total || 0, used: status.disk || 0 },
     network: {
-      up: status.net_in || 0,
-      down: status.net_out || 0,
+      // 同上：net_out 是上传速率、net_in 是下载速率，与「上行/下行」的展示对齐
+      up: status.net_out || 0,
+      down: status.net_in || 0,
       totalUp: status.net_total_up || 0,
       totalDown: status.net_total_down || 0,
     },

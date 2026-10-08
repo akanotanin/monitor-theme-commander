@@ -22,7 +22,11 @@ export type {
   RPC2PingStat,
 } from "./types";
 
-import { RPC2Client } from "./client";
+import { MonitorRPC2Client } from "@/monitor/rpc-client";
 
-/** Module-level singleton — shared RPC2 connection for the entire app */
-export const rpc2Client = new RPC2Client("/api/rpc2");
+/**
+ * Module-level singleton — shared data connection for the entire app.
+ * 极简探针（Monitor）移植：这里换成 Monitor 版实现（REST + /api/ws 实时帧），
+ * 对外接口与原 RPC2Client 相同，调用方无需改动。
+ */
+export const rpc2Client = new MonitorRPC2Client();

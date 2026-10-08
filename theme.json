@@ -1,0 +1,116 @@
+{
+  "name": "Monitor Commander",
+  "short": "commander",
+  "description": "极简探针（Monitor）的赛博朋克指挥台风格主题，前身来自 wayjam/komari-theme-commander。",
+  "version": "1.0.0",
+  "author": "移植到 Monitor by akanotanin",
+  "url": "",
+  "config": [
+    {
+      "type": "title",
+      "label": "视图设置"
+    },
+    {
+      "type": "select",
+      "key": "default_view",
+      "label": "默认视图",
+      "default": "globe",
+      "options": [
+        { "value": "globe", "label": "地球" },
+        { "value": "grid", "label": "网格" },
+        { "value": "table", "label": "表格" },
+        { "value": "uptime", "label": "在线时长" }
+      ],
+      "help": "访客首次打开首页时展示的视图；所选视图被关闭时自动回退到第一个可用视图。"
+    },
+    {
+      "type": "boolean",
+      "key": "enable_globe",
+      "label": "启用地球视图",
+      "default": true,
+      "help": "显示 3D 地球视图：全球节点分布、旋转与中枢连线动画。"
+    },
+    {
+      "type": "string",
+      "key": "globe_hub_node",
+      "label": "地球中枢节点",
+      "default": "",
+      "help": "填节点名后，地球上以它为中心画连线；需填真实节点名（隐私模式只替换显示）。留空关闭。"
+    },
+    {
+      "type": "select",
+      "key": "globe_mode",
+      "label": "地球旋转模式",
+      "default": "dynamic",
+      "options": [
+        { "value": "dynamic", "label": "动态旋转" },
+        { "value": "static", "label": "默认静止" }
+      ],
+      "help": "动态：加载后自动旋转；静止：需手动拖动开启旋转。拖拽始终可用。"
+    },
+    {
+      "type": "boolean",
+      "key": "globe_respect_reduced_motion",
+      "label": "减少动效时暂停地球",
+      "default": false,
+      "help": "系统偏好「减少动效」的访客，地球停止自动旋转（仍可拖动）。"
+    },
+    {
+      "type": "select",
+      "key": "globe_marker_style",
+      "label": "地球标记样式",
+      "default": "rich",
+      "options": [
+        { "value": "rich", "label": "完整" },
+        { "value": "calm", "label": "简洁" },
+        { "value": "lite", "label": "极简" }
+      ],
+      "help": "完整：脉冲动画与速度标签；简洁：扁平标记；极简：仅圆点，CPU 占用更低。"
+    },
+    {
+      "type": "boolean",
+      "key": "enable_uptime",
+      "label": "启用在线时长视图",
+      "default": true,
+      "help": "显示在线时长排行视图：可用性时间线与 SLO 评分。"
+    },
+    {
+      "type": "boolean",
+      "key": "enable_asset_stats",
+      "label": "启用计费汇总",
+      "default": false,
+      "help": "网格 / 表格视图显示「计费汇总」按钮（仅登录用户可见），按币种汇总费用与剩余价值。"
+    },
+    {
+      "type": "title",
+      "label": "外观设置"
+    },
+    {
+      "type": "select",
+      "key": "default_theme",
+      "label": "默认主题",
+      "default": "clean",
+      "options": [
+        { "value": "lumina", "label": "光明" },
+        { "value": "deepspace", "label": "深空" },
+        { "value": "clean", "label": "简洁" },
+        { "value": "auto", "label": "跟随系统" }
+      ],
+      "help": "首次访问者的配色主题；跟随系统时：浅色用光明、深色用深空。"
+    },
+    {
+      "type": "string",
+      "key": "custom_footer",
+      "label": "自定义页脚文本",
+      "default": "",
+      "help": "显示在页脚的自定义文字，留空不显示。"
+    },
+    {
+      "type": "boolean",
+      "key": "enable_privacy_mode",
+      "label": "启用隐私模式",
+      "default": false,
+      "help": "所有访客看到的节点名替换为随机假名；登录管理员可临时关闭。"
+    }
+  ]
+}

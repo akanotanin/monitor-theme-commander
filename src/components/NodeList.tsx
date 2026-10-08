@@ -216,7 +216,7 @@ export function NodeList({ nodes = [], loading = false, onRefresh, defaultView =
         if (!labels.includes(tagFilter)) return false;
       }
       if (statusFilter === 'expiry-warning') {
-        if (!isExpiredOrAlmostExpired(node.expired_at)) return false;
+        if (!isExpiredOrAlmostExpired(node.expired_at, node.expires_in)) return false;
       } else if (statusFilter !== 'all' && node.status !== statusFilter) {
         return false;
       }
@@ -249,8 +249,8 @@ export function NodeList({ nodes = [], loading = false, onRefresh, defaultView =
     }
     const asc = sortMode === 'expiry-asc';
     list.sort((a, b) => {
-      const ta = getExpiryTimestamp(a.expired_at);
-      const tb = getExpiryTimestamp(b.expired_at);
+      const ta = getExpiryTimestamp(a.expired_at, a.expires_in);
+      const tb = getExpiryTimestamp(b.expired_at, b.expires_in);
       if (ta === null && tb === null) return a.weight - b.weight;
       if (ta === null) return 1;
       if (tb === null) return -1;

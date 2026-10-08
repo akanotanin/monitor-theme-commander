@@ -290,7 +290,7 @@ const MobileRow = memo(function MobileRow({ node, isLast, onOpen, t, isLoggedIn 
   const cores = node.cpu_cores || 1;
   const loadRatio = stats ? stats.load.load1 / cores : 0;
   const loadStatus = loadRatio >= 1.5 ? 'critical' : loadRatio >= 1 ? 'warning' : 'normal';
-  const expiryStatus = getExpiryStatus(node.expired_at);
+  const expiryStatus = getExpiryStatus(node.expired_at, node.expires_in);
   const tagList = parseTagList(node.tags).sort((a, b) => (a.color ? 0 : 1) - (b.color ? 0 : 1));
 
   return (
@@ -354,7 +354,7 @@ const MobileRow = memo(function MobileRow({ node, isLast, onOpen, t, isLoggedIn 
                         ? 'text-warning/85 bg-warning/15'
                         : 'text-muted-foreground/55 bg-muted/35',
                   )}>
-                    {formatExpiry(node.expired_at)}
+                    {formatExpiry(node.expired_at, node.expires_in)}
                   </span>
                 </TooltipTrigger>
                 <TooltipContent side="bottom" className="whitespace-pre-line text-xs font-mono">
@@ -486,7 +486,7 @@ export function NodeTable({ nodes }: NodeTableProps) {
       enableSorting: true,
       cell: ({ row }) => {
         const node = row.original;
-        const expiryStatus = getExpiryStatus(node.expired_at);
+        const expiryStatus = getExpiryStatus(node.expired_at, node.expires_in);
         const tagList = parseTagList(node.tags).sort((a, b) => (a.color ? 0 : 1) - (b.color ? 0 : 1));
         const platformLine = [
           node.os,
@@ -548,7 +548,7 @@ export function NodeTable({ nodes }: NodeTableProps) {
                               : 'text-muted-foreground/55 bg-muted/35',
                         )}
                       >
-                        {formatExpiry(node.expired_at)}
+                        {formatExpiry(node.expired_at, node.expires_in)}
                       </span>
                     </TooltipTrigger>
                     <TooltipContent side="bottom" className="whitespace-pre-line text-xs font-mono">

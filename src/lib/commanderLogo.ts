@@ -48,7 +48,7 @@ const palettes: Record<CommanderLogoTheme, {
 
 export function getCommanderLogoSvg(theme: CommanderLogoTheme): string {
   const p = palettes[theme];
-  return `<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Komari Commander">
+  return `<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Monitor Commander">
   <defs>
     <radialGradient id="plate" cx="48%" cy="30%" r="82%">
       <stop offset="0%" stop-color="${p.plateStart}"/>

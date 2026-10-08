@@ -34,3 +34,6 @@ tmp/*
 
 # AI
 AGENTS.md
+# 打包产物与截图留档
+release/
+shots/

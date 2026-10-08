@@ -217,12 +217,12 @@ export function AppFooter({
                 <span className="footer-pri-2 leading-none">
                   {t('footer.poweredBy')}{' '}
                   <a
-                    href="https://github.com/komari-monitor/komari"
+                    href="https://github.com/monitor-probe/monitor"
                     target="_blank"
                     rel="noopener noreferrer"
                     className="text-primary hover:underline"
                   >
-                    Komari Monitor
+                    Monitor
                   </a>
                 </span>
                 {appConfig.isLoggedIn && version && (
@@ -237,7 +237,7 @@ export function AppFooter({
                 <span className="footer-pri-1 leading-none">
                   {t('footer.theme')}{' '}
                   <a
-                    href="https://github.com/wayjam/komari-theme-commander"
+                    href="https://github.com/akanotanin/monitor-theme-commander"
                     target="_blank"
                     rel="noopener noreferrer"
                     className="text-primary hover:underline"

@@ -110,7 +110,7 @@
   "node": {
     "hidden": "隱藏",
     "noNodesAvailable": "暫無節點",
-    "addFromAdmin": "請在 Komari 管理後台新增伺服器。"
+    "addFromAdmin": "請在 Monitor 管理後台新增伺服器。"
   },
   "telemetry": {
     "acquiring": "訊號擷取中...",
@@ -273,7 +273,7 @@
     "theme": "主題"
   },
   "site": {
-    "name": "Komari 監控"
+    "name": "Monitor"
   },
   "lang": {
     "title": "語言",

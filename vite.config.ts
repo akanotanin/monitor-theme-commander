@@ -1,55 +1,18 @@
 import path from "path"
-import fs from "fs"
-import { defineConfig, loadEnv, type Plugin } from "vite"
+import { defineConfig, loadEnv } from "vite"
 import tailwindcss from "@tailwindcss/vite"
 import react from "@vitejs/plugin-react-swc"
 import { VitePWA } from "vite-plugin-pwa"
 import { worldCountriesFilter } from "./scripts/vite-plugin-world-countries-filter"
 
-/**
- * 本地开发时，拦截对 /themes/Commander/komari-theme.json 的请求，
- * 返回项目根目录下的 komari-theme.json，方便调试主题配置。
- */
-function localKomariThemePlugin(): Plugin {
-  const themeRequestPath = "/themes/Commander/komari-theme.json"
-  const localThemeFile = path.resolve(__dirname, "komari-theme.json")
-
-  return {
-    name: "local-komari-theme",
-    apply: "serve",
-    enforce: "pre",
-    configureServer(server) {
-      server.middlewares.use((req, res, next) => {
-        if (!req.url) return next()
-
-        const url = new URL(req.url, "http://localhost")
-        if (!url.pathname.endsWith(themeRequestPath)) return next()
-
-        fs.readFile(localThemeFile, (err, data) => {
-          if (err) {
-            res.statusCode = 404
-            res.setHeader("Content-Type", "application/json; charset=utf-8")
-            res.end(JSON.stringify({ error: "Local theme file not found", file: localThemeFile }))
-            return
-          }
-          res.statusCode = 200
-          res.setHeader("Content-Type", "application/json; charset=utf-8")
-          res.setHeader("Cache-Control", "no-store")
-          res.end(data)
-        })
-      })
-    },
-  }
-}
-
 // https://vite.dev/config/
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), "VITE_")
-  const apiTarget = (env.VITE_API_TARGET || "http://127.0.0.1:25774").trim()
+  // 开发时 /api 代理的目标：极简探针（Monitor）Hub（可用 SSH 隧道映射到本机端口）
+  const apiTarget = (env.VITE_API_TARGET || "http://127.0.0.1:7980").trim()
 
   return {
     plugins: [
-      localKomariThemePlugin(),
       // Strip the unused fields from `world-countries` so the globe chunk only
       // ships what we actually read at runtime. Mode `"merge"` = auto-detect
       // referenced fields + the explicit `fields` list below. To pin extra
@@ -62,11 +25,11 @@ export default defineConfig(({ mode }) => {
       tailwindcss(),
       react(),
       // ── PWA ────────────────────────────────────────────────────────────
-      // This is a *Komari theme*, served at the site root "/". The service
+      // This is a *Monitor theme*, served at the site root "/". The service
       // worker therefore has scope "/" and could otherwise hijack pages that
       // are NOT controlled by the theme (`/admin`, `/terminal`) and the live
-      // RPC2 data channel (`/api/*`, including the WebSocket). We deliberately:
-      //   • precache only the static app shell (+ remote Orbitron font),
+      // data channel (`/api/*`, including the WebSocket). We deliberately:
+      //   • precache only the static app shell (fonts are self-hosted),
       //   • use `prompt` updates (user-driven, no silent reload),
       //   • deny-list `/admin`, `/terminal`, `/api` from the SPA navigate
       //     fallback so those keep hitting the real backend,
@@ -78,9 +41,9 @@ export default defineConfig(({ mode }) => {
         includeAssets: ["favicon.ico", "favicon.svg", "apple-touch-icon.png"],
         manifest: {
           id: "/",
-          name: "Komari Monitor",
-          short_name: "Komari",
-          description: "A simple server monitor tool.",
+          name: "Monitor Commander",
+          short_name: "Commander",
+          description: "Monitor Commander — a monitoring theme for the Monitor probe.",
           lang: "en",
           theme_color: "#0a0e14",
           background_color: "#0a0e14",
@@ -103,27 +66,6 @@ export default defineConfig(({ mode }) => {
           // SPA fallback — but keep non-theme + live API routes off the SW.
           navigateFallback: "index.html",
           navigateFallbackDenylist: [/^\/admin/, /^\/terminal/, /^\/api/],
-          runtimeCaching: [
-            {
-              // Orbitron stylesheet (Google Fonts CSS)
-              urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
-              handler: "StaleWhileRevalidate",
-              options: {
-                cacheName: "google-fonts-stylesheets",
-                cacheableResponse: { statuses: [0, 200] },
-              },
-            },
-            {
-              // Orbitron font files (gstatic)
-              urlPattern: /^https:\/\/fonts\.gstatic\.com\/.*/i,
-              handler: "CacheFirst",
-              options: {
-                cacheName: "google-fonts-webfonts",
-                expiration: { maxEntries: 16, maxAgeSeconds: 60 * 60 * 24 * 365 },
-                cacheableResponse: { statuses: [0, 200] },
-              },
-            },
-          ],
         },
         devOptions: {
           // Keep the SW off during `vite dev` so it can't interfere with the
@@ -163,7 +105,7 @@ export default defineConfig(({ mode }) => {
       },
     },
 
-    // 开发模式下，代理 /api 和 /themes 到 Komari 后端
+    // 开发模式下，代理 /api 到极简探针（Monitor）Hub
     ...(mode === "development"
       ? {
           server: {
@@ -175,13 +117,8 @@ export default defineConfig(({ mode }) => {
                 target: apiTarget,
                 changeOrigin: true,
                 rewriteWsOrigin: true,
-                ws: true, // WebSocket 代理（/api/clients）
+                ws: true, // WebSocket 代理（/api/ws 实时帧）
                 secure: false, // 允许代理到 HTTPS（含自签名证书）
-              },
-              "/themes": {
-                target: apiTarget,
-                changeOrigin: true,
-                secure: false,
               },
             },
           },

@@ -190,8 +190,15 @@ export function formatTrafficType(type: string): string {
  * Returns null if no expiry date is set.
  */
 export function getExpiryStatus(
-  expiredAt: string | null | undefined
+  expiredAt: string | null | undefined,
+  expiresIn?: number | null
 ): 'normal' | 'warning' | 'expired' | null {
+  // 优先用 Hub 下发的日历天数（expires_in）：按访客本地时区换算 expired_at 会差一天
+  if (typeof expiresIn === 'number' && Number.isFinite(expiresIn)) {
+    if (expiresIn < 0) return 'expired';
+    if (expiresIn <= 7) return 'warning'; // 0 = 今天到期，同样按警告处理
+    return 'normal';
+  }
   if (!expiredAt) return null;
   const d = dayjs(expiredAt);
   if (!d.isValid() || d.year() <= 1) return null;
@@ -203,16 +210,22 @@ export function getExpiryStatus(
 
 /** True when the node is expired or within the 7-day warning window. */
 export function isExpiredOrAlmostExpired(
-  expiredAt: string | null | undefined
+  expiredAt: string | null | undefined,
+  expiresIn?: number | null
 ): boolean {
-  const status = getExpiryStatus(expiredAt);
+  const status = getExpiryStatus(expiredAt, expiresIn);
   return status === 'expired' || status === 'warning';
 }
 
 /** Millisecond timestamp for sorting; null when no valid expiry is set. */
 export function getExpiryTimestamp(
-  expiredAt: string | null | undefined
+  expiredAt: string | null | undefined,
+  expiresIn?: number | null
 ): number | null {
+  if (typeof expiresIn === 'number' && Number.isFinite(expiresIn)) {
+    // 以「此刻 + N 天」近似到期时刻：用于排序与剩余价值估算，不受时区影响
+    return Date.now() + expiresIn * 24 * 60 * 60 * 1000;
+  }
   if (!expiredAt) return null;
   const d = dayjs(expiredAt);
   if (!d.isValid() || d.year() <= 1) return null;
@@ -220,7 +233,14 @@ export function getExpiryTimestamp(
 }
 
 /** Format expiry date as short text */
-export function formatExpiry(expiredAt: string): string {
+export function formatExpiry(expiredAt: string, expiresIn?: number | null): string {
+  if (typeof expiresIn === 'number' && Number.isFinite(expiresIn)) {
+    if (expiresIn < 0) return `Expired ${-expiresIn}d ago`;
+    if (expiresIn === 0) return 'Expires today';
+    if (expiresIn <= 30) return `${expiresIn}d left`;
+    const abs = dayjs(expiredAt);
+    return abs.isValid() ? abs.format('YYYY-MM-DD') : '';
+  }
   const d = dayjs(expiredAt);
   if (!d.isValid() || d.year() <= 1) return '';
   const now = dayjs();
@@ -235,7 +255,11 @@ export function formatExpiry(expiredAt: string): string {
 }
 
 /** Format expiry as relative time only (never falls back to an absolute date). */
-export function formatExpiryRelative(expiredAt: string): string {
+export function formatExpiryRelative(expiredAt: string, expiresIn?: number | null): string {
+  if (typeof expiresIn === 'number' && Number.isFinite(expiresIn)) {
+    if (expiresIn < 0) return `Expired ${-expiresIn}d ago`;
+    return expiresIn === 0 ? 'Expires today' : `${expiresIn}d left`;
+  }
   const d = dayjs(expiredAt);
   if (!d.isValid() || d.year() <= 1) return '';
   const now = dayjs();

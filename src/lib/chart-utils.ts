@@ -93,8 +93,9 @@ export function nodeStatsToLoadRecord(stats: NodeStats): LoadRecord {
     process: stats.process,
     connections: stats.connections.tcp,
     connections_udp: stats.connections.udp,
-    net_in: stats.network.up,
-    net_out: stats.network.down,
+    // 与历史记录同一口径：net_in = 下行、net_out = 上行
+    net_in: stats.network.down,
+    net_out: stats.network.up,
   };
 }
 

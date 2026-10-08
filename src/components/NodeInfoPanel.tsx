@@ -47,7 +47,7 @@ export function NodeInfoPanel({ node }: { node: NodeWithStatus }) {
   const ramUsage = stats ? (stats.ram.used / stats.ram.total) * 100 : 0;
   const diskUsage = stats ? (stats.disk.used / stats.disk.total) * 100 : 0;
   const isFree = node.price === -1;
-  const expiryStatus = getExpiryStatus(node.expired_at);
+  const expiryStatus = getExpiryStatus(node.expired_at, node.expires_in);
   const hasTraffic = !!(node.traffic_limit && node.traffic_limit > 0 && node.traffic_limit_type && node.traffic_limit_type !== 'no_limit');
   const tagList = parseTagList(node.tags);
   const hasSystemTags = !!(node.group || node.hidden);
@@ -333,7 +333,7 @@ export function NodeInfoPanel({ node }: { node: NodeWithStatus }) {
                       'type-metric-lg tabular-nums leading-none',
                       expiryStatus === 'expired' ? 'text-destructive' : expiryStatus === 'warning' ? 'text-warning' : 'text-foreground/85',
                     )}>
-                      {formatExpiryRelative(node.expired_at)}
+                      {formatExpiryRelative(node.expired_at, node.expires_in)}
                     </div>
                     <div className="flex items-center justify-between gap-3 mt-auto pt-1 border-t border-border/15">
                       <span className="type-hud-label-sm tabular-nums">
@@ -365,7 +365,7 @@ export function NodeInfoPanel({ node }: { node: NodeWithStatus }) {
                         'type-metric-lg tabular-nums leading-none',
                         expiryStatus === 'expired' ? 'text-destructive' : expiryStatus === 'warning' ? 'text-warning' : 'text-foreground/85',
                       )}>
-                        {formatExpiryRelative(node.expired_at)}
+                        {formatExpiryRelative(node.expired_at, node.expires_in)}
                       </span>
                       <span className="type-hud-label-sm tabular-nums">
                         {dayjs(node.expired_at).format('YYYY-MM-DD')}

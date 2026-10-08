@@ -181,6 +181,8 @@ export interface RPC2NodeData {
   created_at: string;
   updated_at: string;
   public_remark?: string;
+  /** 极简探针（Monitor）扩展：距到期天数（按日历日计算），由适配层透传 */
+  expires_in?: number | null;
 }
 
 /**

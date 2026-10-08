@@ -42,7 +42,7 @@ export function getNodeMonthlyEstimate(node: NodeWithStatus): number {
 
 export function getNodeRemainingValue(node: NodeWithStatus, nowMs = Date.now()): number {
   if (!isBillableNode(node) || !node.billing_cycle || node.billing_cycle <= 0) return 0;
-  const expiry = getExpiryTimestamp(node.expired_at);
+  const expiry = getExpiryTimestamp(node.expired_at, node.expires_in);
   if (expiry === null) return node.price;
   if (expiry <= nowMs) return 0;
   const remainingDays = (expiry - nowMs) / (1000 * 60 * 60 * 24);

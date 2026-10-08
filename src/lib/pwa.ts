@@ -69,9 +69,9 @@ export function registerPwa(): void {
   if (typeof window === "undefined") return
   if (!("serviceWorker" in navigator)) return
 
-  // Komari Theme Commander is served at "/", so its SW scope is also "/".
+  // Monitor Commander is served at "/", so its SW scope is also "/".
   // Keep that behavior reserved for installed PWA windows; ordinary desktop
-  // browser tabs should behave like the live Komari web UI, without update
+  // browser tabs should behave like the live Monitor web UI, without update
   // prompts or a theme-level service worker controlling the site root.
   if (!isInstalledPwaWindow()) {
     void unregisterBrowserTabServiceWorker()

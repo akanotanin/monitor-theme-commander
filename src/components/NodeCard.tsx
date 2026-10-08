@@ -323,7 +323,7 @@ export const NodeCard = memo(function NodeCard({ node }: NodeCardProps) {
   const loadRatio = stats ? stats.load.load1 / (node.cpu_cores || 1) : 0;
   const loadStatus = getUsageStatus(loadRatio * 100, { warning: 100, critical: 150 });
   const pingLatency = getBestPingLatency(stats?.ping);
-  const expiryStatus = getExpiryStatus(node.expired_at);
+  const expiryStatus = getExpiryStatus(node.expired_at, node.expires_in);
   const priceLabel =
     node.price === -1 ? t('label.free') : node.price === 0 ? t('label.notSet') : `${node.currency}${node.price}`;
 
@@ -416,7 +416,7 @@ export const NodeCard = memo(function NodeCard({ node }: NodeCardProps) {
                           ? 'text-warning/85 bg-warning/15'
                           : 'text-muted-foreground/55 bg-muted/35',
                     )}>
-                      {formatExpiry(node.expired_at)}
+                      {formatExpiry(node.expired_at, node.expires_in)}
                     </span>
                   </TooltipTrigger>
                   <TooltipContent side="bottom" className="whitespace-pre-line text-xs font-mono">

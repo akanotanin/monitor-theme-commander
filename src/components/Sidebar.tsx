@@ -689,7 +689,7 @@ function NodeDetailView({
             )}
           </div>
           {/* Chips row: group + expiry */}
-          {(node.group || (isLoggedIn && node.price !== -1 && getExpiryStatus(node.expired_at))) && (
+          {(node.group || (isLoggedIn && node.price !== -1 && getExpiryStatus(node.expired_at, node.expires_in))) && (
             <div className="flex items-center flex-wrap gap-1">
               {node.group && (
                 <span className="text-xs font-mono text-primary/90 bg-primary/12 border border-primary/20 px-1.5 py-0.5 rounded-sm">
@@ -697,7 +697,7 @@ function NodeDetailView({
                 </span>
               )}
               {isLoggedIn && node.price !== -1 && (() => {
-                const expiryStatus = getExpiryStatus(node.expired_at);
+                const expiryStatus = getExpiryStatus(node.expired_at, node.expires_in);
                 if (!expiryStatus) return null;
                 const tone = expiryStatus === 'expired'
                   ? 'text-destructive bg-destructive/12 border-destructive/25'
@@ -711,7 +711,7 @@ function NodeDetailView({
                         'text-xs font-metric border px-1.5 py-0.5 rounded-sm cursor-default',
                         tone,
                       )}>
-                        {formatExpiry(node.expired_at)}
+                        {formatExpiry(node.expired_at, node.expires_in)}
                       </span>
                     </TooltipTrigger>
                     <TooltipContent side="bottom" className="whitespace-pre-line text-xs font-mono">

@@ -110,7 +110,7 @@
   "node": {
     "hidden": "HIDDEN",
     "noNodesAvailable": "NO NODES AVAILABLE",
-    "addFromAdmin": "Add servers in the Komari admin panel."
+    "addFromAdmin": "Add servers in the Monitor admin panel."
   },
   "telemetry": {
     "acquiring": "ACQUIRING SIGNAL...",
@@ -273,7 +273,7 @@
     "theme": "Theme"
   },
   "site": {
-    "name": "Komari Monitor"
+    "name": "Monitor"
   },
   "lang": {
     "title": "LANGUAGE",
