@@ -16,7 +16,7 @@ import dayjs from 'dayjs';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 import { TagPill } from './TagPill';
 import { OfflineNodeState } from './OfflineNodeState';
-import { buildTagChips, parseTagList } from '@/lib/parseTags';
+import { parseTagList } from '@/lib/parseTags';
 interface SidebarProps {
   nodes: NodeWithStatus[];
   loading?: boolean;
@@ -106,13 +106,9 @@ function NodeRowContentInner({
         </div>
         {emoji && <FlagBadge region={node.region} size={15} />}
       </div>
-      {/* Tags row — show max 3 tags + overflow count */}
+      {/* Tags row — 只放 Komari tags；分组与备注都不在列表行显示（无内容时整行不渲染） */}
+      {(visibleTags.length > 0 || hiddenTagCount > 0 || node.hidden) && (
       <div className="flex min-w-0 items-center gap-1.5 ml-3.5">
-        {node.group && (
-          <span className="text-xs font-mono text-primary/80 bg-primary/15 px-1.5 py-0.5 rounded-sm flex-shrink-0">
-            {node.group}
-          </span>
-        )}
         {visibleTags.map((tag, i) => (
           <TagPill
             key={i}
@@ -140,6 +136,7 @@ function NodeRowContentInner({
           </span>
         )}
       </div>
+      )}
       {isOnline && stats && (
         <div
           className="ml-3.5 flex min-w-0 items-center gap-1.5 text-xs font-metric text-muted-foreground"
@@ -631,8 +628,6 @@ function NodeDetailView({
   const isOnline = node.status === 'online';
   const stats = isOnline ? node.stats : undefined;
   const { isLoggedIn } = useAppConfig();
-  // 侧栏详情显示备注标签（与详情页同一口径）；列表行不显示（见 NodeRowContentInner）
-  const chipItems = buildTagChips(node.tags, node.public_remark);
 
   const cpuUsage = stats?.cpu?.usage ?? 0;
   const ramUsage = stats ? (stats.ram.used / stats.ram.total) * 100 : 0;
@@ -727,21 +722,16 @@ function NodeDetailView({
               })()}
             </div>
           )}
-          {/* Tags — Komari tags + 公开备注拆出的标签；列表行不显示备注，这里与详情页显示 */}
-          {chipItems.length > 0 && (() => {
+          {/* Tags — 只放 Komari tags；备注不在侧栏显示（只在详情页） */}
+          {node.tags && (() => {
+            const tagList = parseTagList(node.tags);
             const maxTags = 5;
-            const visibleTags = chipItems.slice(0, maxTags);
-            const hiddenCount = chipItems.length - visibleTags.length;
-            return (
+            const visibleTags = tagList.slice(0, maxTags);
+            const hiddenCount = tagList.length - visibleTags.length;
+            return tagList.length > 0 ? (
               <div className="flex flex-wrap gap-1">
-                {visibleTags.map((chip, i) => (
-                  <TagPill
-                    key={i}
-                    label={chip.label}
-                    color={chip.color}
-                    size="sm"
-                    className={chip.isRemark ? 'truncate max-w-[12rem]' : undefined}
-                  />
+                {visibleTags.map((tag, i) => (
+                  <TagPill key={i} label={tag.label} color={tag.color} size="sm" />
                 ))}
                 {hiddenCount > 0 && (
                   <Tooltip>
@@ -751,12 +741,12 @@ function NodeDetailView({
                       </span>
                     </TooltipTrigger>
                     <TooltipContent side="bottom" className="text-xs font-mono">
-                      {chipItems.slice(maxTags).map(t => t.label).join(', ')}
+                      {tagList.slice(maxTags).map(t => t.label).join(', ')}
                     </TooltipContent>
                   </Tooltip>
                 )}
               </div>
-            );
+            ) : null;
           })()}
         </div>
       </div>
