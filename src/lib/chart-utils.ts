@@ -1,0 +1,276 @@
+/**
+ * Shared chart constants, types, and data transformation utilities
+ * Used by metric chart components (`src/components/metric-charts/`) and consumers
+ */
+
+import type { NodeStats } from '@/services/api';
+
+/** A single row of chart data — `time` is always present, other keys are numeric task/metric values */
+export type ChartDataRow = { time: string; [key: string]: string | number | null };
+
+/**
+ * Metric / ping series colors — `--chart-1`…`--chart-9` in `index.css` (per theme).
+ * Order: CPU, load, RAM, disk, TCP, UDP, net in, net out, swap; ping lines cycle the same tokens.
+ */
+export const chartColors = [
+  "var(--chart-1)",
+  "var(--chart-2)",
+  "var(--chart-3)",
+  "var(--chart-4)",
+  "var(--chart-5)",
+  "var(--chart-6)",
+  "var(--chart-7)",
+  "var(--chart-8)",
+  "var(--chart-9)",
+] as const;
+
+export interface LoadRecord {
+  time: string;
+  cpu: number;
+  ram: number;
+  ram_total: number;
+  swap: number;
+  swap_total: number;
+  disk: number;
+  disk_total: number;
+  load: number;
+  process: number;
+  connections: number;
+  connections_udp: number;
+  net_in: number;
+  net_out: number;
+}
+
+export interface PingRecord {
+  client: string;
+  task_id: number;
+  time: string;
+  value: number;
+}
+
+export interface TaskInfo {
+  id: number;
+  name: string;
+  interval: number;
+  type?: string;
+  loss?: number;
+  avg?: number;
+  latest?: number;
+  max?: number;
+  min?: number;
+  p50?: number;
+  p99?: number;
+  p99_p50_ratio?: number;
+  total?: number;
+}
+
+export interface ChartDataPoint {
+  time: string;
+  cpu: number;
+  ram: number;
+  swap: number;
+  disk: number;
+  load: number;
+  process: number;
+  connections: number;
+  connections_udp: number;
+  network_in: number;
+  network_out: number;
+}
+
+/** Convert nested NodeStats (WS / recent API) into flat LoadRecord for charts */
+export function nodeStatsToLoadRecord(stats: NodeStats): LoadRecord {
+  return {
+    time: stats.updated_at,
+    cpu: stats.cpu.usage,
+    ram: stats.ram.used,
+    ram_total: stats.ram.total,
+    swap: stats.swap.used,
+    swap_total: stats.swap.total,
+    disk: stats.disk.used,
+    disk_total: stats.disk.total,
+    load: stats.load.load1,
+    process: stats.process,
+    connections: stats.connections.tcp,
+    connections_udp: stats.connections.udp,
+    net_in: stats.network.up,
+    net_out: stats.network.down,
+  };
+}
+
+export function nodeStatsToLoadRecords(statsList: NodeStats[]): LoadRecord[] {
+  return statsList
+    .map(nodeStatsToLoadRecord)
+    .sort((a, b) => new Date(a.time).getTime() - new Date(b.time).getTime());
+}
+
+/** Transform raw load records into chart-ready data */
+export function transformLoadRecords(records: LoadRecord[]): ChartDataPoint[] {
+  return records
+    .filter((r) => r && typeof r.time === 'string' && !isNaN(new Date(r.time).getTime()))
+    .map((r) => ({
+      time: new Date(r.time).toISOString(),
+      cpu: Math.min(Math.max(r.cpu || 0, 0), 100),
+      ram: Math.min(Math.max(r.ram_total ? (r.ram / r.ram_total) * 100 : 0, 0), 100),
+      swap: Math.min(Math.max(r.swap_total ? (r.swap / r.swap_total) * 100 : 0, 0), 100),
+      disk: Math.min(Math.max(r.disk_total ? (r.disk / r.disk_total) * 100 : 0, 0), 100),
+      load: r.load,
+      process: r.process || 0,
+      connections: r.connections,
+      connections_udp: r.connections_udp,
+      network_in: r.net_in / 1024,
+      network_out: r.net_out / 1024,
+    }));
+}
+
+/** Format tooltip label with date + time */
+export function labelFormatter(value: number | string): string {
+  return new Date(value).toLocaleString([], {
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  });
+}
+
+/** Shared chart card CSS class */
+export const chartCardClass = "border border-border/50 bg-card/80 backdrop-blur-xl chart-card-commander commander-corners";
+
+/** Shared chart container CSS class */
+export const chartContainerClass = "h-[200px] sm:h-[250px] md:h-[280px] w-full !aspect-auto overflow-hidden chart-mobile-optimized";
+
+/** Grid stroke color — theme-aware, using CSS variable */
+export const gridStrokeColor = "var(--border)";
+
+/**
+ * Process raw ping records into chart-ready data points.
+ * - Groups records by time with jitter tolerance
+ * - Treats negative values as null (packet loss)
+ * - Clips to the specified time window
+ */
+export function processPingRecords(
+  records: PingRecord[],
+  tasks: TaskInfo[],
+  hours: number,
+): ChartDataRow[] {
+  if (!records.length) return [];
+
+  // Compute jitter tolerance from task intervals
+  const taskIntervals = tasks
+    .map(t => t.interval)
+    .filter((v): v is number => typeof v === 'number' && v > 0);
+  const fallbackIntervalSec = taskIntervals.length ? Math.min(...taskIntervals) : 60;
+  const toleranceMs = Math.min(6000, Math.max(800, Math.floor(fallbackIntervalSec * 1000 * 0.25)));
+
+  const grouped: Record<number, ChartDataRow> = {};
+  const anchors: number[] = [];
+
+  for (const rec of records) {
+    const ts = new Date(rec.time).getTime();
+    let anchor: number | null = null;
+    for (const a of anchors) {
+      if (Math.abs(a - ts) <= toleranceMs) { anchor = a; break; }
+    }
+    const use = anchor ?? ts;
+    if (!grouped[use]) {
+      grouped[use] = { time: new Date(use).toISOString() };
+      if (anchor === null) anchors.push(use);
+    }
+    grouped[use][rec.task_id] = rec.value < 0 ? null : rec.value;
+  }
+
+  const merged = Object.values(grouped).sort(
+    (a: ChartDataRow, b: ChartDataRow) => new Date(a.time as string).getTime() - new Date(b.time as string).getTime(),
+  );
+
+  // Clip to the last `hours` window with one extra leading point
+  if (merged.length === 0) return [];
+  const lastTs = new Date(merged[merged.length - 1].time).getTime();
+  const fromTs = lastTs - hours * 3600_000;
+  let startIdx = 0;
+  for (let i = 0; i < merged.length; i++) {
+    if (new Date(merged[i].time).getTime() >= fromTs) {
+      startIdx = Math.max(0, i - 1);
+      break;
+    }
+  }
+  return merged.slice(startIdx);
+}
+
+/**
+ * Linear interpolation for null gaps in ping data.
+ * Only interpolates across gaps shorter than maxGapMs.
+ */
+export function interpolatePingNulls(
+  data: ChartDataRow[],
+  taskKeys: string[],
+  opts: { maxGapMultiplier?: number; minCapMs?: number; maxCapMs?: number } = {},
+): ChartDataRow[] {
+  if (!data.length || !taskKeys.length) return data;
+
+  const { maxGapMultiplier = 6, minCapMs = 120_000, maxCapMs = 1_800_000 } = opts;
+
+  // Compute median sample interval
+  const timestamps = data.map(d => new Date(d.time).getTime());
+  const gaps: number[] = [];
+  for (let i = 1; i < timestamps.length; i++) gaps.push(timestamps[i] - timestamps[i - 1]);
+  gaps.sort((a, b) => a - b);
+  const medianGap = gaps.length ? gaps[Math.floor(gaps.length / 2)] : 60_000;
+  const maxGapMs = Math.min(maxCapMs, Math.max(minCapMs, medianGap * maxGapMultiplier));
+
+  const result = data.map(d => ({ ...d }));
+
+  for (const key of taskKeys) {
+    let lastValidIdx: number | null = null;
+    for (let i = 0; i < result.length; i++) {
+      const val = result[i][key];
+      if (val !== null && val !== undefined) {
+        if (lastValidIdx !== null && i - lastValidIdx > 1) {
+          const gapMs = timestamps[i] - timestamps[lastValidIdx];
+          if (gapMs <= maxGapMs) {
+            const startVal = result[lastValidIdx][key] as number;
+            const endVal = val as number;
+            for (let j = lastValidIdx + 1; j < i; j++) {
+              const ratio = (timestamps[j] - timestamps[lastValidIdx]) / gapMs;
+              result[j][key] = startVal + (endVal - startVal) * ratio;
+            }
+          }
+        }
+        lastValidIdx = i;
+      }
+    }
+  }
+  return result;
+}
+
+/**
+ * Apply EWMA (Exponential Weighted Moving Average) smoothing to ping data.
+ * @param alpha - Smoothing factor (0 < alpha <= 1). Lower = smoother. Default 0.3.
+ */
+export function ewmaSmooth(
+  data: ChartDataRow[],
+  taskKeys: string[],
+  alpha: number = 0.3,
+): ChartDataRow[] {
+  if (!data.length || !taskKeys.length) return data;
+  const result = data.map(d => ({ ...d }));
+
+  for (const key of taskKeys) {
+    let prev: number | null = null;
+    for (let i = 0; i < result.length; i++) {
+      const val = result[i][key];
+      if (val === null || val === undefined) {
+        prev = null; // reset on gap
+        continue;
+      }
+      if (prev === null) {
+        prev = val as number;
+      } else {
+        prev = alpha * (val as number) + (1 - alpha) * prev;
+        result[i][key] = Math.round(prev * 100) / 100;
+      }
+    }
+  }
+  return result;
+}

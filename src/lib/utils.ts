@@ -1,0 +1,248 @@
+import { clsx, type ClassValue } from "clsx"
+import { extendTailwindMerge } from "tailwind-merge"
+import prettyBytes from "pretty-bytes"
+import dayjs from "dayjs"
+import duration from "dayjs/plugin/duration"
+import { getRegionEnglishName } from '@/data/regionCoords'
+
+dayjs.extend(duration)
+
+const twMerge = extendTailwindMerge({
+  extend: {
+    classGroups: {
+      'font-size': [{ text: ['xxs'] }],
+    },
+  },
+})
+
+export function cn(...inputs: ClassValue[]) {
+  return twMerge(clsx(inputs))
+}
+
+/**
+ * Extract country flag emoji from the region field.
+ * Region format: "🇸🇬 Singapore" or "🇯🇵 Japan".
+ * A flag emoji consists of two Regional Indicator Symbols.
+ */
+export function extractRegionEmoji(region: string): string {
+  if (!region) return '';
+  const chars = [...region];
+  if (chars.length >= 2) {
+    const first = chars[0].codePointAt(0) ?? 0;
+    if (first >= 0x1F1E6 && first <= 0x1F1FF) {
+      return chars[0] + chars[1];
+    }
+  }
+  return '';
+}
+
+/**
+ * Extract text portion from the region field (everything after the flag emoji).
+ * Region format: "🇸🇬 Singapore" → "Singapore", "🇯🇵" → ""
+ */
+export function extractRegionText(region: string): string {
+  if (!region) return '';
+  const emoji = extractRegionEmoji(region);
+  if (!emoji) return region.trim();
+  return region.slice(emoji.length).trim();
+}
+
+/** Human-readable region label: text after flag, or English name from emoji, or raw string. */
+export function getRegionDisplayName(region?: string): string {
+  if (!region) return '';
+  const text = extractRegionText(region);
+  if (text) return text;
+  const emoji = extractRegionEmoji(region);
+  return emoji ? getRegionEnglishName(emoji) : region.trim();
+}
+
+/** Format network speed */
+export function formatSpeed(bytesPerSecond: number): string {
+  if (bytesPerSecond === 0) return '0 B/s';
+  return prettyBytes(bytesPerSecond, { bits: false }) + '/s';
+}
+
+/**
+ * Split network speed into a fixed-width numeric part and a unit part.
+ * Useful for layouts that need each row to keep a steady column width
+ * regardless of the underlying value (the numeric part is padded to a
+ * stable character count, the unit is rendered separately with a fixed
+ * column width).
+ */
+export function formatSpeedParts(bytesPerSecond: number): { value: string; unit: string } {
+  if (!bytesPerSecond || bytesPerSecond < 0) {
+    return { value: '0', unit: 'B/s' };
+  }
+  const units = ['B', 'KB', 'MB', 'GB', 'TB', 'PB'];
+  let v = bytesPerSecond;
+  let i = 0;
+  while (v >= 1000 && i < units.length - 1) {
+    v /= 1000;
+    i++;
+  }
+  // Keep numeric portion to 3 significant digits so the visual width stays
+  // consistent (e.g. "1.23", "12.3", "123").
+  let value: string;
+  if (v >= 100) value = v.toFixed(0);
+  else if (v >= 10) value = v.toFixed(1);
+  else value = v.toFixed(2);
+  return { value, unit: `${units[i]}/s` };
+}
+
+/**
+ * Format a byte count using binary (1024-based) IEC units (GiB/MiB/KiB).
+ *
+ * Komari reports all capacity/total byte values in binary units — e.g.
+ * `traffic_limit = 214748364800 = 200 * 1024^3` (200 GiB). A decimal
+ * (1000-based) formatter would render that as "215 GB", so capacities must use
+ * the binary base. Network *speed* stays decimal/SI (see `formatSpeed`).
+ */
+export function formatBytes(bytes: number): string {
+  if (!Number.isFinite(bytes) || bytes <= 0) return '0 B';
+  return prettyBytes(bytes, { binary: true });
+}
+
+export type UptimePrecision = 'year' | 'month' | 'day' | 'hour' | 'minute';
+
+/**
+ * Format uptime with configurable precision.
+ * Shows all units from the largest non-zero unit down to the specified precision.
+ * @param seconds - uptime in seconds
+ * @param precision - smallest unit to display, default 'hour'
+ */
+export function formatUptime(seconds: number, precision: UptimePrecision = 'hour', maxUnits: number = 2): string {
+  const d = dayjs.duration(seconds, 'seconds');
+  const years = Math.floor(d.asYears());
+  const months = Math.floor(d.asMonths()) % 12;
+  const days = Math.floor(d.asDays()) % 30;
+  const hours = d.hours();
+  const minutes = d.minutes();
+
+  const units: { value: number; label: string; key: UptimePrecision }[] = [
+    { value: years, label: 'y', key: 'year' },
+    { value: months, label: 'mo', key: 'month' },
+    { value: days, label: 'd', key: 'day' },
+    { value: hours, label: 'h', key: 'hour' },
+    { value: minutes, label: 'min', key: 'minute' },
+  ];
+
+  const precisionIndex = units.findIndex(u => u.key === precision);
+  const visibleUnits = units.slice(0, precisionIndex + 1);
+
+  // Find first non-zero unit
+  const firstNonZero = visibleUnits.findIndex(u => u.value > 0);
+  if (firstNonZero === -1) return `0${visibleUnits[visibleUnits.length - 1].label}`;
+
+  return visibleUnits
+    .slice(firstNonZero)
+    .filter(u => u.value > 0 || (u.key === visibleUnits[visibleUnits.length - 1].key && firstNonZero === visibleUnits.length - 1)) // keep zero only if it's the only unit
+    .slice(0, maxUnits)
+    .map(u => `${u.value}${u.label}`)
+    .join(' ');
+}
+
+/** Get resource usage status */
+export function getUsageStatus(
+  usage: number,
+  thresholds: { warning: number; critical: number } = { warning: 60, critical: 80 }
+): 'normal' | 'warning' | 'critical' {
+  if (usage >= thresholds.critical) return 'critical';
+  if (usage >= thresholds.warning) return 'warning';
+  return 'normal';
+}
+
+/** Traffic limit type */
+export type TrafficLimitType = 'max' | 'min' | 'sum' | 'up' | 'down';
+
+/**
+ * Calculate current traffic usage based on traffic_limit_type.
+ * totalUp/totalDown come from WebSocket realtime data network.totalUp/totalDown (bytes).
+ */
+export function calcTrafficUsage(
+  totalUp: number,
+  totalDown: number,
+  type: TrafficLimitType
+): number {
+  switch (type) {
+    case 'up': return totalUp;
+    case 'down': return totalDown;
+    case 'sum': return totalUp + totalDown;
+    case 'max': return Math.max(totalUp, totalDown);
+    case 'min': return Math.min(totalUp, totalDown);
+    default: return totalUp + totalDown;
+  }
+}
+
+/** Format traffic limit type display label */
+export function formatTrafficType(type: string): string {
+  switch (type) {
+    case 'up': return '↑UP';
+    case 'down': return '↓DOWN';
+    case 'sum': return '↑+↓';
+    case 'max': return 'MAX';
+    case 'min': return 'MIN';
+    default: return type.toUpperCase();
+  }
+}
+
+/**
+ * Determine expiry status.
+ * Returns null if no expiry date is set.
+ */
+export function getExpiryStatus(
+  expiredAt: string | null | undefined
+): 'normal' | 'warning' | 'expired' | null {
+  if (!expiredAt) return null;
+  const d = dayjs(expiredAt);
+  if (!d.isValid() || d.year() <= 1) return null;
+  const now = dayjs();
+  if (d.isBefore(now)) return 'expired';
+  if (d.diff(now, 'day') <= 7) return 'warning';
+  return 'normal';
+}
+
+/** True when the node is expired or within the 7-day warning window. */
+export function isExpiredOrAlmostExpired(
+  expiredAt: string | null | undefined
+): boolean {
+  const status = getExpiryStatus(expiredAt);
+  return status === 'expired' || status === 'warning';
+}
+
+/** Millisecond timestamp for sorting; null when no valid expiry is set. */
+export function getExpiryTimestamp(
+  expiredAt: string | null | undefined
+): number | null {
+  if (!expiredAt) return null;
+  const d = dayjs(expiredAt);
+  if (!d.isValid() || d.year() <= 1) return null;
+  return d.valueOf();
+}
+
+/** Format expiry date as short text */
+export function formatExpiry(expiredAt: string): string {
+  const d = dayjs(expiredAt);
+  if (!d.isValid() || d.year() <= 1) return '';
+  const now = dayjs();
+  if (d.isBefore(now)) {
+    const days = now.diff(d, 'day');
+    return days === 0 ? 'Expired today' : `Expired ${days}d ago`;
+  }
+  const days = d.diff(now, 'day');
+  if (days === 0) return 'Expires today';
+  if (days <= 30) return `${days}d left`;
+  return d.format('YYYY-MM-DD');
+}
+
+/** Format expiry as relative time only (never falls back to an absolute date). */
+export function formatExpiryRelative(expiredAt: string): string {
+  const d = dayjs(expiredAt);
+  if (!d.isValid() || d.year() <= 1) return '';
+  const now = dayjs();
+  if (d.isBefore(now)) {
+    const days = now.diff(d, 'day');
+    return days === 0 ? 'Expired today' : `Expired ${days}d ago`;
+  }
+  const days = d.diff(now, 'day');
+  return days === 0 ? 'Expires today' : `${days}d left`;
+}
