@@ -683,14 +683,9 @@ function NodeDetailView({
               </span>
             )}
           </div>
-          {/* Chips row: group + expiry */}
-          {(node.group || (isLoggedIn && node.price !== -1 && getExpiryStatus(node.expired_at, node.expires_in))) && (
+          {/* Chips row: expiry — 分组不在侧栏详情显示 */}
+          {isLoggedIn && node.price !== -1 && getExpiryStatus(node.expired_at, node.expires_in) && (
             <div className="flex items-center flex-wrap gap-1">
-              {node.group && (
-                <span className="text-xs font-mono text-primary/90 bg-primary/12 border border-primary/20 px-1.5 py-0.5 rounded-sm">
-                  {node.group}
-                </span>
-              )}
               {isLoggedIn && node.price !== -1 && (() => {
                 const expiryStatus = getExpiryStatus(node.expired_at, node.expires_in);
                 if (!expiryStatus) return null;

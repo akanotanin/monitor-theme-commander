@@ -79,7 +79,7 @@ try {
   await session.screenshot('shots/desktop-globe.png')
   console.log('  已截图 shots/desktop-globe.png')
 
-  // ⑩ 地球形态：列表行不显示分组/标签/备注；侧栏详情也不显示备注（备注只在详情页）
+  // ⑩ 地球形态：列表行不显示分组/标签/备注；侧栏详情不显示分组/备注（备注只在详情页）
   const sideRowChips = await session.evaluate(`document.querySelectorAll('.sidebar-node-item .tag-pill-neutral, .sidebar-node-item [class*="bg-primary/15"]').length`)
   check('地球侧栏列表行不显示分组/标签/备注', sideRowChips === 0, `实际 ${sideRowChips}`)
   const clickedSideRow = await clickSelector(session, '.sidebar-node-item')
@@ -87,6 +87,12 @@ try {
   check('地球侧栏能打开节点详情', clickedSideRow === true && sideDetail === true)
   const sideDetailChips = await session.evaluate(`document.querySelectorAll('.tag-pill-neutral').length`)
   check('侧栏详情不显示备注', sideDetailChips === 0, `实际 ${sideDetailChips}`)
+  const sideDetailGroup = await session.evaluate(`(() => {
+    const panel = document.querySelector('[aria-label="Back to fleet"]')?.closest('div.flex.flex-col.h-full')
+    if (!panel) return 'no-panel'
+    return panel.querySelectorAll('[class*="bg-primary/12"]').length
+  })()`)
+  check('侧栏详情不显示分组', sideDetailGroup === 0, `实际 ${sideDetailGroup}`)
 
   // ② 卡片视图
   check('能点击「卡片」视图', await clickViewTab(session, '卡片') === true)
