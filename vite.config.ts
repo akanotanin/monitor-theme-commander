@@ -59,6 +59,9 @@ export default defineConfig(({ mode }) => {
         },
         workbox: {
           globPatterns: ["**/*.{js,css,html,svg,png,ico,webp,woff,woff2}"],
+          // Flags are 271 country SVGs (~2.4 MB) — keep them out of the app-shell
+          // precache; they get cached on demand via the runtime route below.
+          globIgnores: ["flags/**"],
           // Globe / charts chunks can be large; precache them for offline shell.
           maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
           cleanupOutdatedCaches: true,
@@ -66,6 +69,17 @@ export default defineConfig(({ mode }) => {
           // SPA fallback — but keep non-theme + live API routes off the SW.
           navigateFallback: "index.html",
           navigateFallbackDenylist: [/^\/admin/, /^\/terminal/, /^\/api/],
+          runtimeCaching: [
+            {
+              // Country flags — cache on first view, serve offline afterwards.
+              urlPattern: /\/flags\/.*\.svg$/,
+              handler: "CacheFirst",
+              options: {
+                cacheName: "flags",
+                expiration: { maxEntries: 300, maxAgeSeconds: 60 * 60 * 24 * 90 },
+              },
+            },
+          ],
         },
         devOptions: {
           // Keep the SW off during `vite dev` so it can't interfere with the

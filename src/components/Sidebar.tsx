@@ -9,11 +9,11 @@ import type { NodeWithStatus } from '@/services/api';
 import { Progress } from '@/components/ui/progress';
 import { Button } from '@/components/ui/button';
 import { cn, extractRegionEmoji, getRegionDisplayName, formatSpeed, formatBytes, formatUptime, getUsageStatus, calcTrafficUsage, formatTrafficType, getExpiryStatus, formatExpiry } from '@/lib/utils';
+import { FlagBadge } from './FlagBadge';
 import type { TrafficLimitType } from '@/lib/utils';
 import { useAppConfig } from '@/hooks/useAppConfig';
 import dayjs from 'dayjs';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
-import { RemarkNote } from './RemarkNote';
 import { TagPill } from './TagPill';
 import { OfflineNodeState } from './OfflineNodeState';
 import { parseTagList } from '@/lib/parseTags';
@@ -66,6 +66,8 @@ function NodeRowContentInner({
     : '';
   const emoji = extractRegionEmoji(node.region);
 
+  // 地球侧栏的列表行只显示标签（Komari tags）；备注只在详情页显示，
+  // 避免整个舰队列表每一行都被备注标签撑满。
   const tagList = parseTagList(node.tags);
   const maxVisibleTags = 3;
   const visibleTags = tagList.slice(0, maxVisibleTags);
@@ -102,11 +104,7 @@ function NodeRowContentInner({
             )}
           </div>
         </div>
-        {emoji && (
-          <span className="text-base flex-shrink-0 leading-none bg-muted/30 rounded-sm px-1 py-0.5 border border-border/20">
-            {emoji}
-          </span>
-        )}
+        {emoji && <FlagBadge region={node.region} size={15} />}
       </div>
       {/* Tags row — show max 3 tags + overflow count */}
       <div className="flex min-w-0 items-center gap-1.5 ml-3.5">
@@ -595,7 +593,7 @@ function NodeSystemInfo({ node }: { node: NodeWithStatus }) {
         <span className="inline-flex min-w-0 items-center gap-1 truncate type-spec-value font-mono text-xs">
           {node.region ? (
             <>
-              {regionEmoji && <span className="shrink-0">{regionEmoji}</span>}
+              {regionEmoji && <FlagBadge region={node.region} size={13} />}
               <span className="truncate">{regionName || node.region}</span>
             </>
           ) : (
@@ -727,7 +725,7 @@ function NodeDetailView({
               })()}
             </div>
           )}
-          {/* Tags */}
+          {/* Tags — 列表行与侧栏详情都不放备注；备注只在详情页显示 */}
           {node.tags && (() => {
             const tagList = parseTagList(node.tags);
             const maxTags = 5;
@@ -957,12 +955,6 @@ function NodeDetailView({
                 </div>
               )}
 
-              {/* Remark — inline annotation, same panel rhythm */}
-              {node.public_remark && (
-                <div className="stat-section border-t border-border/20 px-2.5 py-2">
-                  <RemarkNote text={node.public_remark} variant="public" layout="inline" />
-                </div>
-              )}
             </div>
           </>
         ) : null}

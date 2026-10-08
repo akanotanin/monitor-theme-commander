@@ -31,6 +31,10 @@
       loads on the critical path without any media-swap trick.
     -->
     <link rel="stylesheet" href="/fonts/fonts.css" />
+    <!-- Country flags ship as bundled SVGs (flag-icons): Windows has no emoji
+         flag glyphs and degrades 🇯🇵 to the bare letters "JP", so flag emoji
+         are never rendered directly. -->
+    <link rel="stylesheet" href="/vendor/flag-icons.min.css" />
   </head>
   <body>
     <div id="root"></div>

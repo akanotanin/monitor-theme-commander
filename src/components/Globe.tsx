@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import createGlobe, { type Marker, type Arc } from 'cobe';
 import type { NodeWithStatus } from '@/services/api';
 import { extractRegionEmoji, extractRegionText } from '@/lib/utils';
+import { FlagBadge } from './FlagBadge';
 import { getCoords } from '@/data/regionCoords';
 import type { VisualTheme } from '@/hooks/useTheme';
 import { getGlobeAutoSpinFps, type GlobeMarkerStyle } from '@/lib/globe-performance';
@@ -615,7 +616,12 @@ export const Globe = forwardRef<GlobeHandle, GlobeProps>(function Globe(
       context: {
         powerPreference: 'high-performance',
         antialias: false,
-        desynchronized: true,
+        // No `desynchronized: true` here. The low-latency presentation path
+        // bypasses compositor synchronization and visibly flickers/tears on
+        // Windows + NVIDIA during continuous redraw (i.e. exactly while the
+        // globe auto-spins); with the loop idling when stopped, the defect
+        // only shows up while rotating. The one-frame latency cost is
+        // irrelevant for a 30fps decoration.
       },
     });
     globeRef.current = globe;
@@ -1318,7 +1324,7 @@ const SelectionOverlay = memo(function SelectionOverlay({
       <div className="globe-selected-tether" data-status={nodeStatus} />
       <div className="globe-selected-label" data-status={nodeStatus}>
         <div className="globe-selected-label-head">
-          <span className="globe-selected-label-flag">{emoji}</span>
+          <span className="globe-selected-label-flag"><FlagBadge region={emoji} size={13} /></span>
           {regionText && <span className="globe-selected-label-region">{regionText}</span>}
           <span className={`globe-selected-status globe-selected-status-${nodeStatus}`}>
             {nodeStatus === 'online' ? t('status.online') : t('status.offline')}

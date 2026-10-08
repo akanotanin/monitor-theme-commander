@@ -47,6 +47,21 @@ export function extractRegionText(region: string): string {
   return region.slice(emoji.length).trim();
 }
 
+/**
+ * 旗帜 emoji（一对区域指示符）→ ISO 3166-1 alpha-2 国家代码；不是旗帜时返回空串。
+ * 用于把地区渲染成包内 SVG 国旗 —— Windows 的 Segoe UI Emoji 没有旗帜字形，
+ * 直接渲染 emoji 会退化成「JP」「DE」这样的字母对。
+ */
+export function regionEmojiToCode(emoji: string | null | undefined): string {
+  if (!emoji) return '';
+  const points = [...emoji]
+    .map(ch => ch.codePointAt(0) ?? 0)
+    .filter(point => point !== 0xfe0f);
+  if (points.length !== 2) return '';
+  if (points.some(point => point < 0x1f1e6 || point > 0x1f1ff)) return '';
+  return points.map(point => String.fromCharCode(65 + (point - 0x1f1e6))).join('');
+}
+
 /** Human-readable region label: text after flag, or English name from emoji, or raw string. */
 export function getRegionDisplayName(region?: string): string {
   if (!region) return '';
