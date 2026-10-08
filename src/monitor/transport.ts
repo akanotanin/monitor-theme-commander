@@ -53,12 +53,22 @@ export class MonitorRequestError extends Error {
 
 /** 请求极简探针接口；站点未开放状态页时跳到后台登录 */
 export async function request<T>(path: string, signal?: AbortSignal): Promise<T> {
-  const timeout = AbortSignal.timeout(15000)
-  const response = await fetch(`${API_BASE}${path}`, {
-    signal: signal ? AbortSignal.any([signal, timeout]) : timeout,
-    credentials: 'same-origin',
-    headers: { accept: 'application/json' },
-  })
+  let response!: Response
+  // Hub 在并发查询过多时会短暂返回 503（实测：8 个 ping 窗口并发时有几成概率中招）；
+  // 退避重试两次，别把偶发的过载直接抛给 UI。
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const timeout = AbortSignal.timeout(15000)
+    response = await fetch(`${API_BASE}${path}`, {
+      signal: signal ? AbortSignal.any([signal, timeout]) : timeout,
+      credentials: 'same-origin',
+      headers: { accept: 'application/json' },
+    })
+    if ((response.status === 503 || response.status === 429) && attempt < 2) {
+      await new Promise(resolve => setTimeout(resolve, 600 * (attempt + 1)))
+      continue
+    }
+    break
+  }
   if (response.status === 401) {
     location.assign('/admin/')
     throw new MonitorRequestError(401, '需要登录极简探针后台')
@@ -174,11 +184,11 @@ async function history(id: string, hours: number, series: 'metrics' | 'ping', po
   return await promise
 }
 
-/** 限制并发，避免一个放大的图表把 Hub 的连接池占满 */
-async function mapLimited<T, R>(items: T[], worker: (item: T) => Promise<R>): Promise<R[]> {
+/** 限制并发，避免一个放大的图表把 Hub 的连接池占满（并发过多时 Hub 会 503） */
+async function mapLimited<T, R>(items: T[], worker: (item: T) => Promise<R>, limit = 4): Promise<R[]> {
   const output: R[] = []
   let next = 0
-  await Promise.all(Array.from({ length: Math.min(4, items.length) }, async () => {
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, async () => {
     while (next < items.length) {
       const index = next++
       output[index] = await worker(items[index]!)
@@ -279,6 +289,7 @@ function pingStatsFromWindow(h: HistoryWindow): Record<string, RPC2PingStat> {
 /** 后台预热节点的延迟统计（不阻塞当前请求，下一帧自然带上） */
 function ensurePingStats(nodes: MonitorNode[]): void {
   const now = Date.now()
+  const wanted: MonitorNode[] = []
   for (const node of nodes) {
     if (!node.online)
       continue
@@ -288,12 +299,26 @@ function ensurePingStats(nodes: MonitorNode[]): void {
     const cached = pingCache.get(id)
     if (cached && now - cached.at < PING_TTL)
       continue
-    pingPending.add(id)
-    void history(id, 1, 'ping', 60)
-      .then(h => pingCache.set(id, { at: Date.now(), stats: pingStatsFromWindow(h) }))
-      .catch(() => { /* 单个节点的延迟拿不到时忽略 */ })
-      .finally(() => pingPending.delete(id))
+    wanted.push(node)
   }
+  if (!wanted.length)
+    return
+  for (const node of wanted)
+    pingPending.add(String(node.id))
+  // 限 3 路并发：Hub 的 ping 查询在 8 路并发时会随机 503，排队拉取
+  void mapLimited(wanted, async (node) => {
+    const id = String(node.id)
+    try {
+      const h = await history(id, 1, 'ping', 60)
+      pingCache.set(id, { at: Date.now(), stats: pingStatsFromWindow(h) })
+    }
+    catch {
+      /* 单个节点的延迟拿不到时忽略，下个周期再试 */
+    }
+    finally {
+      pingPending.delete(id)
+    }
+  }, 3)
 }
 
 /**
