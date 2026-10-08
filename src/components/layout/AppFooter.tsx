@@ -224,6 +224,7 @@ export function AppFooter({
                   >
                     Monitor
                   </a>
+                  {t('footer.poweredBySuffix') && ` ${t('footer.poweredBySuffix')}`}
                 </span>
                 {appConfig.isLoggedIn && version && (
                   <>

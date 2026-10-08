@@ -270,6 +270,7 @@
   },
   "footer": {
     "poweredBy": "Powered by",
+    "poweredBySuffix": "",
     "theme": "Theme"
   },
   "site": {

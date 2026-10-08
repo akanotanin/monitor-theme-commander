@@ -270,6 +270,7 @@
   },
   "footer": {
     "poweredBy": "由",
+    "poweredBySuffix": "驅動",
     "theme": "主題"
   },
   "site": {

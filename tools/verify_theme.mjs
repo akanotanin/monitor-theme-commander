@@ -134,6 +134,8 @@ try {
   check('备注拆成独立标签胶囊', flagInfo.chips.includes('CN2 GIA'), flagInfo.chips.join(' / ').slice(0, 120))
   check('实时通道显示「已连接」', info.ws.includes('已连接'), `实际 "${info.ws}"`)
   check('标签页标题不是 Komari 字样', !info.title.includes('Komari'), `实际 "${info.title}"`)
+  const footerText = await session.evaluate(`document.querySelector('footer')?.innerText ?? ''`)
+  check('页脚署名是「由 Monitor 驱动」', footerText.includes('由 Monitor 驱动'), footerText.replace(/\n/g, ' | ').slice(-80))
   console.log(`    标题：${info.title}`)
   console.log(`    页头：${info.header}`)
   console.log(`    首卡：${info.firstCard.replace(/\n/g, ' | ').slice(0, 220)}`)
