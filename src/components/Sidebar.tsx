@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { useVirtualizer } from '@tanstack/react-virtual';
-import { ArrowLeft, Cpu, HardDrive, MemoryStick, Network, BarChart3, ExternalLink, Server, Layers, Search, X, Activity, MapPin, Terminal, Clock, Gauge } from 'lucide-react';
+import { ArrowLeft, Cpu, HardDrive, MemoryStick, Network, BarChart3, ExternalLink, Server, Layers, Search, X, Activity, MapPin, Terminal, Clock, Gauge, Signal } from 'lucide-react';
 import { SystemIcon } from '@/lib/systemIcon';
 import type { NodeWithStatus } from '@/services/api';
 import { Progress } from '@/components/ui/progress';
@@ -17,6 +17,9 @@ import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip
 import { TagPill } from './TagPill';
 import { OfflineNodeState } from './OfflineNodeState';
 import { parseTagList } from '@/lib/parseTags';
+import { Sparkline } from './Sparkline';
+import { useNodePingHistory } from '@/hooks/useNodePingHistory';
+import { getBestPingLatency } from '@/services/api';
 interface SidebarProps {
   nodes: NodeWithStatus[];
   loading?: boolean;
@@ -628,6 +631,8 @@ function NodeDetailView({
   const isOnline = node.status === 'online';
   const stats = isOnline ? node.stats : undefined;
   const { isLoggedIn } = useAppConfig();
+  const pingSeries = useNodePingHistory(node.uuid, !!stats);
+  const livePingLatency = getBestPingLatency(stats?.ping);
 
   const cpuUsage = stats?.cpu?.usage ?? 0;
   const ramUsage = stats ? (stats.ram.used / stats.ram.total) * 100 : 0;
@@ -834,6 +839,21 @@ function NodeDetailView({
                 </div>
               </div>
 
+              {/* Ping latency curve — best line, last hour */}
+              {pingSeries && pingSeries.length >= 2 && (
+                <div className="stat-section border-t border-border/20 p-2.5 flex flex-col gap-1.5" data-accent="ping">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-1.5">
+                      <span className="stat-chip stat-chip--ping"><Signal className="h-3 w-3" /></span>
+                      <span className="type-hud-label">{t('chart.pingLatency')}</span>
+                    </div>
+                    <span className="type-metric-md tabular-nums shrink-0">
+                      {livePingLatency !== null ? `${Math.round(livePingLatency)} ms` : `${Math.round(pingSeries[pingSeries.length - 1])} ms`}
+                    </span>
+                  </div>
+                  <Sparkline data={pingSeries} width={300} height={30} className="sparkline-fluid" color="var(--chart-6)" />
+                </div>
+              )}
               {/* Traffic limit */}
               {!!(node.traffic_limit && node.traffic_limit > 0 && node.traffic_limit_type && node.traffic_limit_type !== 'no_limit') && (
                 <div className="stat-section border-t border-border/20 p-2.5 flex flex-col gap-1.5">

@@ -96,6 +96,23 @@ try {
   })()`)
   check('侧栏详情不显示分组', sideDetailGroup === 0, `实际 ${sideDetailGroup}`)
 
+  // ⑪ 侧栏详情：延迟曲线（磁盘下方、流量上方）
+  const pingPath = await session.waitFor(`(() => {
+    const p = document.querySelector('.sidebar-detail-telemetry [data-accent="ping"] .sparkline-container svg path')
+    return !!p && (p.getAttribute('d') || '').length > 50
+  })()`, 45000)
+  const pingLayout = await session.evaluate(`(() => {
+    const tel = document.querySelector('.sidebar-detail-telemetry')
+    if (!tel) return JSON.stringify({ ok: false })
+    const secs = [...tel.querySelectorAll('.stat-section')]
+    const ping = tel.querySelector('[data-accent="ping"]')
+    const traffic = secs.find(e => (e.innerText || '').includes('流量'))
+    return JSON.stringify({ ping: secs.indexOf(ping), traffic: secs.indexOf(traffic) })
+  })()`)
+  const pingPos = JSON.parse(pingLayout)
+  check('侧栏详情显示延迟曲线（画出曲线）', pingPath === true)
+  check('延迟曲线位于磁盘与流量之间', pingPos.ping === 1 && pingPos.traffic === 2, `ping@${pingPos.ping} traffic@${pingPos.traffic}`)
+
   // ⑨ 图表弹窗（侧栏详情 → 「图表」按钮）：网络页签画速率曲线；负载/连接显示「无历史数据」
   const chartsBtn = await session.evaluate(`(() => {
     const b = [...document.querySelectorAll('button')].find(x => x.innerText.trim() === '图表')

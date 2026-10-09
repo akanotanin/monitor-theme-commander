@@ -248,6 +248,42 @@ export function interpolatePingNulls(
 }
 
 /**
+ * Sidebar latency curve: pick the best ping task (lowest average latency) from
+ * the last `hours` of records and return its series for a sparkline. Packet
+ * loss arrives as negative values and is treated as a gap, interpolated by the
+ * same rules as the ping charts.
+ */
+export function buildPingSparkline(
+  records: PingRecord[],
+  tasks: TaskInfo[],
+  hours: number,
+): { values: number[]; latest: number | null } | null {
+  if (!records.length) return null;
+  const rows = processPingRecords(records, tasks, hours);
+  if (rows.length < 2) return null;
+
+  const keys = [...new Set(records.map(r => String(r.task_id)))]
+    .filter(k => rows.some(row => typeof row[k] === 'number' && Number.isFinite(row[k])));
+  if (!keys.length) return null;
+
+  const avgOf = (k: string) => {
+    const task = tasks.find(item => String(item.id) === k);
+    return typeof task?.avg === 'number' && Number.isFinite(task.avg) && task.avg > 0
+      ? task.avg
+      : Number.POSITIVE_INFINITY;
+  };
+  keys.sort((a, b) => avgOf(a) - avgOf(b));
+  const best = keys[0];
+
+  const values: number[] = [];
+  for (const row of interpolatePingNulls(rows, [best])) {
+    const value = row[best];
+    if (typeof value === 'number' && Number.isFinite(value)) values.push(value);
+  }
+  if (values.length < 2) return null;
+  return { values, latest: values[values.length - 1] };
+}
+/**
  * Apply EWMA (Exponential Weighted Moving Average) smoothing to ping data.
  * @param alpha - Smoothing factor (0 < alpha <= 1). Lower = smoother. Default 0.3.
  */
