@@ -250,10 +250,8 @@ export function interpolatePingNulls(
 }
 
 /**
- * Sidebar latency curve: pick the best ping task (lowest average latency) from
- * the last `hours` of records and return its series for a sparkline. Packet
- * loss arrives as negative values and is treated as a gap, interpolated by the
- * same rules as the ping charts.
+ * 主题设置「Ping 延迟线路」→ 取第一个非空任务名（一行一个；逗号/顿号/分号连写也认）；
+ * 留空返回 null（= 自动选最优线路）。
  */
 export function pickPingLine(raw: string | null | undefined): string | null {
   if (!raw) return null;
@@ -265,6 +263,12 @@ export function pickPingLine(raw: string | null | undefined): string | null {
   return null;
 }
 
+/**
+ * Sidebar latency curve: pick the best ping task (lowest average latency) from
+ * the last `hours` of records and return its series for a sparkline. Packet
+ * loss arrives as negative values and is treated as a gap, interpolated by the
+ * same rules as the ping charts.
+ */
 export function buildPingSparkline(
   records: PingRecord[],
   tasks: TaskInfo[],

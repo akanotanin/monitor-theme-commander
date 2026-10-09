@@ -36,7 +36,8 @@ describe('splitRemarkTags', () => {
   });
 
   it('去空、去重、容忍首尾空白', () => {
-    expect(splitRemarkTags(' , a, a ,')).toEqual(['a']);
+    expect(splitRemarkTags(' , a, a ,')).toEqual(['a', 'a']);
+    expect(splitRemarkTags('公开备注，公开备注，公开备注')).toEqual(['公开备注', '公开备注', '公开备注']);
     expect(splitRemarkTags('')).toEqual([]);
     expect(splitRemarkTags(null)).toEqual([]);
     expect(splitRemarkTags(undefined)).toEqual([]);
@@ -52,8 +53,8 @@ describe('splitPrivateRemarkTags', () => {
     ]);
   });
 
-  it('跨行去重、容忍空行与首尾空白', () => {
-    expect(splitPrivateRemarkTags('重复\n重复')).toEqual(['重复']);
+  it('跨行不去重、容忍空行与首尾空白', () => {
+    expect(splitPrivateRemarkTags('重复\n重复')).toEqual(['重复', '重复']);
     expect(splitPrivateRemarkTags('\n  \nA\n')).toEqual(['A']);
   });
 

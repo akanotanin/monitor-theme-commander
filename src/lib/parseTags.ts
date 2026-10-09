@@ -108,16 +108,15 @@ export function parseTagLabels(tags: string | null | undefined): string[] {
 
 /**
  * 公开备注 → 标签清单。站长在极简探针后台把备注写成逗号清单，
- * 每一项渲染成一枚标签；半角/全角逗号、分号、顿号都认，空项与重复项丢掉。
+ * 每一项渲染成一枚标签；半角/全角逗号、分号、顿号都认，空项丢掉。
+ * 重复项**不合并**（写几项就出几枚，与 jikasei 同一口径——站长常用重复项凑占位）。
  */
 export function splitRemarkTags(remark: string | null | undefined): string[] {
   if (!remark) return [];
-  const seen = new Set<string>();
   const out: string[] = [];
   for (const part of remark.split(/[,;，；、]/)) {
     const label = part.trim();
-    if (!label || seen.has(label)) continue;
-    seen.add(label);
+    if (!label) continue;
     out.push(label);
   }
   return out;
@@ -125,16 +124,13 @@ export function splitRemarkTags(remark: string | null | undefined): string[] {
 
 /**
  * 私有备注拆标签：**先按换行分段、段内再按逗号拆**（站长常按行写多条，Hub 对它没有单行约束），
- * 与公开备注（splitRemarkTags）同一套去空去重；详情页把它渲染成带锁小卡片。
+ * 与公开备注（splitRemarkTags）同一套只去空项、不去重；详情页把它渲染成带锁小卡片。
  */
 export function splitPrivateRemarkTags(remark: string | null | undefined): string[] {
   if (!remark) return [];
-  const seen = new Set<string>();
   const out: string[] = [];
   for (const line of remark.split(/\r?\n/)) {
     for (const label of splitRemarkTags(line)) {
-      if (seen.has(label)) continue;
-      seen.add(label);
       out.push(label);
     }
   }
