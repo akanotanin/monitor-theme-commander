@@ -834,30 +834,39 @@ function NodeDetailView({
                 </div>
               </div>
 
-              {/* Load */}
-              <div className="stat-section border-t border-border/20 p-2.5 flex flex-col gap-1.5" data-accent="load">
-                <div className="flex items-center gap-1.5">
-                  <span className="stat-chip stat-chip--load"><Activity className="h-3 w-3" /></span>
-                  <span className="type-hud-label">{t('label.load')}</span>
-                </div>
-                <div className={cn('type-metric-hero tabular-nums', loadStatusTone)}>
-                  {stats.load.load1.toFixed(2)}
-                </div>
-                <div className="grid grid-cols-3 gap-1 pt-1.5 border-t border-border/15">
-                  <div>
-                    <div className="type-hud-label-sm">{t('label.load1m')}</div>
-                    <div className="type-metric-md tabular-nums">{stats.load.load1.toFixed(2)}</div>
+              {/* Traffic limit */}
+              {!!(node.traffic_limit && node.traffic_limit > 0 && node.traffic_limit_type && node.traffic_limit_type !== 'no_limit') && (
+                <div className="stat-section border-t border-border/20 p-2.5 flex flex-col gap-1.5">
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <span className="stat-chip stat-chip--traffic shrink-0"><Gauge className="h-3 w-3" /></span>
+                    <span className="type-hud-label truncate">
+                      {t('label.traffic')} <span className="text-muted-foreground/60 normal-case">({formatTrafficType(node.traffic_limit_type as TrafficLimitType)})</span>
+                    </span>
                   </div>
-                  <div>
-                    <div className="type-hud-label-sm">{t('label.load5m')}</div>
-                    <div className="type-metric-md tabular-nums text-foreground/85">{stats.load.load5.toFixed(2)}</div>
+                  <div className="flex items-baseline justify-between gap-2 tabular-nums">
+                    <span className={cn(
+                      'type-metric-md',
+                      (() => {
+                        const used = calcTrafficUsage(stats.network.totalUp, stats.network.totalDown, node.traffic_limit_type as TrafficLimitType);
+                        const pct = (used / node.traffic_limit!) * 100;
+                        return pct >= 90 ? 'text-destructive' : pct >= 70 ? 'text-warning' : '';
+                      })()
+                    )}>
+                      {formatBytes(calcTrafficUsage(stats.network.totalUp, stats.network.totalDown, node.traffic_limit_type as TrafficLimitType))}
+                      <span className="text-muted-foreground/60 mx-0.5">/</span>
+                      {formatBytes(node.traffic_limit)}
+                    </span>
                   </div>
-                  <div>
-                    <div className="type-hud-label-sm">{t('label.load15m')}</div>
-                    <div className="type-metric-md tabular-nums text-foreground/65">{stats.load.load15.toFixed(2)}</div>
-                  </div>
+                  <Progress
+                    value={Math.min((calcTrafficUsage(stats.network.totalUp, stats.network.totalDown, node.traffic_limit_type as TrafficLimitType) / node.traffic_limit) * 100, 100)}
+                    className="h-1.5"
+                    indicatorClassName={(() => {
+                      const pct = (calcTrafficUsage(stats.network.totalUp, stats.network.totalDown, node.traffic_limit_type as TrafficLimitType) / node.traffic_limit) * 100;
+                      return pct >= 90 ? 'bg-destructive' : pct >= 70 ? 'bg-warning' : '';
+                    })()}
+                  />
                 </div>
-              </div>
+              )}
 
               {/* Network */}
               <div className="stat-section border-t border-border/20 p-2.5 flex flex-col gap-2" data-accent="network">
@@ -896,6 +905,31 @@ function NodeDetailView({
                 )}
               </div>
 
+              {/* Load */}
+              <div className="stat-section border-t border-border/20 p-2.5 flex flex-col gap-1.5" data-accent="load">
+                <div className="flex items-center gap-1.5">
+                  <span className="stat-chip stat-chip--load"><Activity className="h-3 w-3" /></span>
+                  <span className="type-hud-label">{t('label.load')}</span>
+                </div>
+                <div className={cn('type-metric-hero tabular-nums', loadStatusTone)}>
+                  {stats.load.load1.toFixed(2)}
+                </div>
+                <div className="grid grid-cols-3 gap-1 pt-1.5 border-t border-border/15">
+                  <div>
+                    <div className="type-hud-label-sm">{t('label.load1m')}</div>
+                    <div className="type-metric-md tabular-nums">{stats.load.load1.toFixed(2)}</div>
+                  </div>
+                  <div>
+                    <div className="type-hud-label-sm">{t('label.load5m')}</div>
+                    <div className="type-metric-md tabular-nums text-foreground/85">{stats.load.load5.toFixed(2)}</div>
+                  </div>
+                  <div>
+                    <div className="type-hud-label-sm">{t('label.load15m')}</div>
+                    <div className="type-metric-md tabular-nums text-foreground/65">{stats.load.load15.toFixed(2)}</div>
+                  </div>
+                </div>
+              </div>
+
               {/* Uptime + process — single-line readout, no hero metric */}
               <div className="stat-section border-t border-border/20 p-2.5">
                 <div className="flex items-center justify-between gap-3">
@@ -912,40 +946,6 @@ function NodeDetailView({
                   </div>
                 )}
               </div>
-
-              {/* Traffic limit */}
-              {!!(node.traffic_limit && node.traffic_limit > 0 && node.traffic_limit_type && node.traffic_limit_type !== 'no_limit') && (
-                <div className="stat-section border-t border-border/20 p-2.5 flex flex-col gap-1.5">
-                  <div className="flex items-center gap-1.5 min-w-0">
-                    <span className="stat-chip stat-chip--traffic shrink-0"><Gauge className="h-3 w-3" /></span>
-                    <span className="type-hud-label truncate">
-                      {t('label.traffic')} <span className="text-muted-foreground/60 normal-case">({formatTrafficType(node.traffic_limit_type as TrafficLimitType)})</span>
-                    </span>
-                  </div>
-                  <div className="flex items-baseline justify-between gap-2 tabular-nums">
-                    <span className={cn(
-                      'type-metric-md',
-                      (() => {
-                        const used = calcTrafficUsage(stats.network.totalUp, stats.network.totalDown, node.traffic_limit_type as TrafficLimitType);
-                        const pct = (used / node.traffic_limit!) * 100;
-                        return pct >= 90 ? 'text-destructive' : pct >= 70 ? 'text-warning' : '';
-                      })()
-                    )}>
-                      {formatBytes(calcTrafficUsage(stats.network.totalUp, stats.network.totalDown, node.traffic_limit_type as TrafficLimitType))}
-                      <span className="text-muted-foreground/60 mx-0.5">/</span>
-                      {formatBytes(node.traffic_limit)}
-                    </span>
-                  </div>
-                  <Progress
-                    value={Math.min((calcTrafficUsage(stats.network.totalUp, stats.network.totalDown, node.traffic_limit_type as TrafficLimitType) / node.traffic_limit) * 100, 100)}
-                    className="h-1.5"
-                    indicatorClassName={(() => {
-                      const pct = (calcTrafficUsage(stats.network.totalUp, stats.network.totalDown, node.traffic_limit_type as TrafficLimitType) / node.traffic_limit) * 100;
-                      return pct >= 90 ? 'bg-destructive' : pct >= 70 ? 'bg-warning' : '';
-                    })()}
-                  />
-                </div>
-              )}
 
             </div>
           </>
