@@ -1,9 +1,10 @@
-import { useState, useMemo, useRef, useEffect, useCallback, memo } from 'react';
+import { useState, useMemo, useRef, useEffect, useCallback, useLayoutEffect, memo } from 'react';
+import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { useVirtualizer } from '@tanstack/react-virtual';
-import { ArrowLeft, Cpu, HardDrive, MemoryStick, Network, BarChart3, ExternalLink, Server, Layers, Search, X, Activity, MapPin, Terminal, Clock, Gauge, Signal } from 'lucide-react';
+import { ArrowLeft, Cpu, HardDrive, MemoryStick, Network, BarChart3, ExternalLink, Server, Layers, Search, X, Activity, MapPin, Terminal, Clock, Gauge, Signal, Lock } from 'lucide-react';
 import { SystemIcon } from '@/lib/systemIcon';
 import type { NodeWithStatus } from '@/services/api';
 import { Progress } from '@/components/ui/progress';
@@ -16,7 +17,7 @@ import dayjs from 'dayjs';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 import { TagPill } from './TagPill';
 import { OfflineNodeState } from './OfflineNodeState';
-import { parseTagList } from '@/lib/parseTags';
+import { buildTagChips, parseTagList, splitPrivateRemarkTags, type TagColor } from '@/lib/parseTags';
 import { Sparkline } from './Sparkline';
 import { useNodePingHistory } from '@/hooks/useNodePingHistory';
 import { getBestPingLatency } from '@/services/api';
@@ -617,6 +618,67 @@ function NodeSystemInfo({ node }: { node: NodeWithStatus }) {
   );
 }
 
+/** 头部单行芯片项：日期 / 分组 / 公开备注 / 私有备注。 */
+type HeadChipItem = {
+  key: string;
+  label: string;
+  kind: 'expiry' | 'group' | 'remark' | 'private';
+  color?: TagColor | null;
+};
+
+/**
+ * 单行芯片行的自适应：隐形量宽行按实测宽度算出放得下几枚，
+ * 放不下的在真行里折进「+N」悬浮层。
+ */
+function useChipsFit() {
+  const rowRef = useRef<HTMLDivElement | null>(null);
+  const measureRef = useRef<HTMLDivElement | null>(null);
+  const [fitCount, setFitCount] = useState(Number.POSITIVE_INFINITY);
+
+  const recompute = useCallback(() => {
+    const row = rowRef.current;
+    const measure = measureRef.current;
+    if (!row || !measure) return;
+    const avail = row.clientWidth;
+    if (avail <= 0) return;
+    const widths = [...measure.querySelectorAll<HTMLElement>('[data-chip-key]')].map(el => el.getBoundingClientRect().width);
+    const gap = 4; // gap-1
+    const nChip = 34; // 「+N」芯片预留宽度
+    let used = 0;
+    let fit = 0;
+    for (let i = 0; i < widths.length; i++) {
+      const need = used + (i > 0 ? gap : 0) + widths[i];
+      if (need <= avail) {
+        used = need;
+        fit = i + 1;
+      } else break;
+    }
+    if (fit < widths.length) {
+      while (fit > 0) {
+        let total = 0;
+        for (let i = 0; i < fit; i++) total += widths[i] + (i > 0 ? gap : 0);
+        if (total + gap + nChip <= avail) break;
+        fit -= 1;
+      }
+    }
+    setFitCount(fit);
+  }, []);
+
+  useLayoutEffect(() => {
+    recompute();
+  });
+
+  useEffect(() => {
+    const row = rowRef.current;
+    if (!row) return;
+    const observer = new ResizeObserver(() => recompute());
+    observer.observe(row);
+    return () => observer.disconnect();
+  }, [recompute]);
+
+  return { rowRef, measureRef, fitCount };
+}
+
 function NodeDetailView({
   node,
   onBack,
@@ -633,6 +695,67 @@ function NodeDetailView({
   const { isLoggedIn } = useAppConfig();
   const pingSeries = useNodePingHistory(node.uuid, !!stats);
   const livePingLatency = getBestPingLatency(stats?.ping);
+  const headRemarkChips = buildTagChips(node.tags, node.public_remark);
+  const headPrivateChips = isLoggedIn ? splitPrivateRemarkTags(node.remark) : [];
+  const headExpiryVisible = isLoggedIn && node.price !== -1 && !!getExpiryStatus(node.expired_at, node.expires_in);
+  const headChips: HeadChipItem[] = [
+    ...(headExpiryVisible
+      ? [{ key: `exp-${node.expired_at}`, label: formatExpiry(node.expired_at, node.expires_in), kind: 'expiry' as const }]
+      : []),
+    ...(node.group ? [{ key: `grp-${node.group}`, label: node.group, kind: 'group' as const }] : []),
+    ...headRemarkChips.map((chip, i) => ({ key: `rem-${i}-${chip.label}`, label: chip.label, kind: 'remark' as const, color: chip.color })),
+    ...headPrivateChips.map((text, i) => ({ key: `prv-${i}-${text}`, label: text, kind: 'private' as const })),
+  ];
+  const { rowRef: headRowRef, measureRef: headMeasureRef, fitCount: headFitCount } = useChipsFit();
+
+  const renderHeadChip = (item: HeadChipItem) => {
+    let inner: ReactNode;
+    if (item.kind === 'expiry') {
+      const expiryStatus = getExpiryStatus(node.expired_at, node.expires_in);
+      const tone = expiryStatus === 'expired'
+        ? 'text-destructive bg-destructive/12 border-destructive/25'
+        : expiryStatus === 'warning'
+          ? 'text-warning bg-warning/12 border-warning/25'
+          : 'text-muted-foreground bg-muted/40 border-border/30';
+      inner = (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span className={cn('text-xs font-metric border px-1.5 py-0.5 rounded-sm cursor-default', tone)}>
+              {formatExpiry(node.expired_at, node.expires_in)}
+            </span>
+          </TooltipTrigger>
+          <TooltipContent side="bottom" className="whitespace-pre-line text-xs font-mono">
+            {t('label.expiryTooltipDetail', {
+              date: dayjs(node.expired_at).format('YYYY-MM-DD HH:mm'),
+              cycle: node.billing_cycle ?? '-',
+              renewal: node.auto_renewal ? t('label.yes') : t('label.no'),
+              price: node.price === -1 ? t('label.free') : node.price === 0 ? t('label.notSet') : `${node.currency}${node.price}`,
+            })}
+          </TooltipContent>
+        </Tooltip>
+      );
+    } else if (item.kind === 'group') {
+      inner = <span className="text-xs font-mono text-primary/80 bg-primary/15 px-1.5 py-0.5 rounded-sm">{item.label}</span>;
+    } else if (item.kind === 'remark') {
+      inner = <TagPill label={item.label} color={item.color ?? null} size="sm" className="inline-block max-w-[9rem] truncate" />;
+    } else {
+      inner = (
+        <span
+          data-private-remark
+          title={t('label.privateRemarkTip', { text: item.label })}
+          className="inline-flex items-center gap-1 text-xs font-mono text-muted-foreground border border-border/60 px-1.5 py-0.5 rounded-sm max-w-[9rem]"
+        >
+          <Lock className="h-3 w-3 shrink-0" aria-hidden />
+          <span className="truncate">{item.label}</span>
+        </span>
+      );
+    }
+    return (
+      <span key={item.key} data-chip-key={item.key} className="flex items-center shrink-0">
+        {inner}
+      </span>
+    );
+  };
 
   const cpuUsage = stats?.cpu?.usage ?? 0;
   const ramUsage = stats ? (stats.ram.used / stats.ram.total) * 100 : 0;
@@ -688,66 +811,30 @@ function NodeDetailView({
               </span>
             )}
           </div>
-          {/* Chips row: expiry — 分组不在侧栏详情显示 */}
-          {isLoggedIn && node.price !== -1 && getExpiryStatus(node.expired_at, node.expires_in) && (
-            <div className="flex items-center flex-wrap gap-1">
-              {isLoggedIn && node.price !== -1 && (() => {
-                const expiryStatus = getExpiryStatus(node.expired_at, node.expires_in);
-                if (!expiryStatus) return null;
-                const tone = expiryStatus === 'expired'
-                  ? 'text-destructive bg-destructive/12 border-destructive/25'
-                  : expiryStatus === 'warning'
-                    ? 'text-warning bg-warning/12 border-warning/25'
-                    : 'text-muted-foreground bg-muted/40 border-border/30';
-                return (
+          {/* Chips row: 日期 + 分组 + 备注 — 单行，放不下的折进 +N 悬浮层 */}
+          {headChips.length > 0 && (
+            <div className="relative min-w-0">
+              <div ref={headRowRef} data-accent="headchips" className="flex items-center gap-1 overflow-hidden whitespace-nowrap">
+                {headChips.slice(0, headFitCount).map(renderHeadChip)}
+                {headChips.length > headFitCount && (
                   <Tooltip>
                     <TooltipTrigger asChild>
-                      <span className={cn(
-                        'text-xs font-metric border px-1.5 py-0.5 rounded-sm cursor-default',
-                        tone,
-                      )}>
-                        {formatExpiry(node.expired_at, node.expires_in)}
+                      <span className="text-xs font-mono text-muted-foreground/60 bg-muted/30 px-1.5 py-0.5 rounded-sm cursor-default shrink-0">
+                        +{headChips.length - headFitCount}
                       </span>
                     </TooltipTrigger>
-                    <TooltipContent side="bottom" className="whitespace-pre-line text-xs font-mono">
-                      {t('label.expiryTooltipDetail', {
-                        date: dayjs(node.expired_at).format('YYYY-MM-DD HH:mm'),
-                        cycle: node.billing_cycle ?? '-',
-                        renewal: node.auto_renewal ? t('label.yes') : t('label.no'),
-                        price: node.price === -1 ? t('label.free') : node.price === 0 ? t('label.notSet') : `${node.currency}${node.price}`,
-                      })}
-                    </TooltipContent>
-                  </Tooltip>
-                );
-              })()}
-            </div>
-          )}
-          {/* Tags — 只放 Komari tags；备注不在侧栏显示（只在详情页） */}
-          {node.tags && (() => {
-            const tagList = parseTagList(node.tags);
-            const maxTags = 5;
-            const visibleTags = tagList.slice(0, maxTags);
-            const hiddenCount = tagList.length - visibleTags.length;
-            return tagList.length > 0 ? (
-              <div className="flex flex-wrap gap-1">
-                {visibleTags.map((tag, i) => (
-                  <TagPill key={i} label={tag.label} color={tag.color} size="sm" />
-                ))}
-                {hiddenCount > 0 && (
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <span className="text-xs font-mono text-muted-foreground/60 bg-muted/30 px-1.5 py-0.5 rounded-sm cursor-default">
-                        +{hiddenCount}
-                      </span>
-                    </TooltipTrigger>
-                    <TooltipContent side="bottom" className="text-xs font-mono">
-                      {tagList.slice(maxTags).map(t => t.label).join(', ')}
+                    <TooltipContent side="bottom" className="whitespace-pre-line text-xs font-mono max-w-xs">
+                      {headChips.slice(headFitCount).map(item => item.label).join('\n')}
                     </TooltipContent>
                   </Tooltip>
                 )}
               </div>
-            ) : null;
-          })()}
+              {/* 量宽用的隐形行：内容与真行一致，不参与布局 */}
+              <div ref={headMeasureRef} aria-hidden className="invisible pointer-events-none absolute left-0 right-0 top-0 flex items-center gap-1 overflow-hidden whitespace-nowrap">
+                {headChips.map(renderHeadChip)}
+              </div>
+            </div>
+          )}
         </div>
       </div>
 

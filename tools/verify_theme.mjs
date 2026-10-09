@@ -81,20 +81,27 @@ try {
   await session.screenshot('shots/desktop-globe.png')
   console.log('  已截图 shots/desktop-globe.png')
 
-  // ⑩ 地球形态：列表行不显示分组/标签/备注；侧栏详情不显示分组/备注（备注只在详情页）
+  // ⑩ 地球形态：列表行不显示分组/标签/备注；侧栏详情头部=单行（日期+分组+备注，溢出折 +N）
   const sideRowChips = await session.evaluate(`document.querySelectorAll('.sidebar-node-item .tag-pill-neutral, .sidebar-node-item [class*="bg-primary/15"]').length`)
   check('地球侧栏列表行不显示分组/标签/备注', sideRowChips === 0, `实际 ${sideRowChips}`)
   const clickedSideRow = await clickSelector(session, '.sidebar-node-item')
   const sideDetail = await session.waitFor(`!!document.querySelector('[aria-label="Back to fleet"]')`, 15000)
   check('地球侧栏能打开节点详情', clickedSideRow === true && sideDetail === true)
-  const sideDetailChips = await session.evaluate(`document.querySelectorAll('.tag-pill-neutral').length`)
-  check('侧栏详情不显示备注', sideDetailChips === 0, `实际 ${sideDetailChips}`)
-  const sideDetailGroup = await session.evaluate(`(() => {
-    const panel = document.querySelector('[aria-label="Back to fleet"]')?.closest('div.flex.flex-col.h-full')
-    if (!panel) return 'no-panel'
-    return panel.querySelectorAll('[class*="bg-primary/12"]').length
+  const headRowInfo = await session.evaluate(`(() => {
+    const row = document.querySelector('[data-accent="headchips"]')
+    if (!row) return JSON.stringify({ ok: false })
+    const cs = getComputedStyle(row)
+    return JSON.stringify({
+      ok: true,
+      nowrap: cs.flexWrap === 'nowrap',
+      clip: cs.overflowX === 'hidden' || cs.overflow === 'hidden',
+      text: (row.innerText || '').replace(/\s+/g, ' '),
+    })
   })()`)
-  check('侧栏详情不显示分组', sideDetailGroup === 0, `实际 ${sideDetailGroup}`)
+  const headRow = JSON.parse(headRowInfo)
+  check('侧栏详情头部有单行标签行（不换行 + 溢出裁切）', headRow.ok === true && headRow.nowrap === true && headRow.clip === true, headRowInfo.slice(0, 120))
+  check('头部行显示分组芯片', headRow.ok === true && headRow.text.includes('东京'), headRow.text)
+  check('头部行显示备注芯片或 +N 悬浮层', headRow.ok === true && (headRow.text.includes('CN2 GIA') || headRow.text.includes('+')), headRow.text)
 
   // ⑪ 侧栏详情：延迟曲线（磁盘下方、流量上方）
   const pingPath = await session.waitFor(`(() => {
