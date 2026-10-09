@@ -347,6 +347,23 @@ try {
     45000,
   )
   check('延迟面板画出曲线', panelChart === true)
+  // 图例不得混入丢包系列（legendType=none 的条目必须被跳过）：条目全部有文字
+  const legendInfo = JSON.parse(await session.evaluate(`(() => {
+    const panel = document.querySelector('[data-accent="table-panel"]')
+    const wrap = panel && panel.querySelector('.recharts-legend-wrapper')
+    const items = wrap ? [...wrap.querySelectorAll(':scope > div > div')] : []
+    return JSON.stringify({ count: items.length, empty: items.filter(k => !(k.innerText || '').trim()).length })
+  })()`))
+  check('延迟面板图例无空条目（丢包系列不混入图例）', legendInfo.count >= 1 && legendInfo.empty === 0, JSON.stringify(legendInfo))
+  // 绘图区不得被图例折行挤塌（手机端图例单行横滑后，绘图区高度应远大于图例）
+  const plotInfo = JSON.parse(await session.evaluate(`(() => {
+    const panel = document.querySelector('[data-accent="table-panel"]')
+    const surface = panel && panel.querySelector('.recharts-surface')
+    const legendWrap = panel && panel.querySelector('.recharts-legend-wrapper')
+    const h = el => el ? Math.round(el.getBoundingClientRect().height) : 0
+    return JSON.stringify({ surface: h(surface), legend: h(legendWrap), plot: h(surface) - h(legendWrap) })
+  })()`))
+  check('延迟面板绘图区不被图例挤塌（高度 ≥ 80）', plotInfo.plot >= 80, JSON.stringify(plotInfo))
   const panelTabs = await session.evaluate(`[...document.querySelectorAll('[data-accent="table-panel"] button')].map(b => (b.innerText || '').trim()).filter(Boolean)`)
   check('延迟面板有 1H/6H/24H/7D 档位', ['1H', '6H', '24H', '7D'].every(x => panelTabs.includes(x)), panelTabs.join(' / '))
   await session.evaluate(`(() => { const b = [...document.querySelectorAll('[data-accent="table-panel"] button')].find(x => x.innerText.trim() === '24H'); if (b) b.click(); return !!b })()`)

@@ -289,7 +289,13 @@ function ChartLegendContent({
   }) {
   const { config } = useChart()
 
-  if (!payload?.length) {
+  // recharts 把 legendType="none" 的条目留在 payload 里（type: 'none'），
+  // 官方 DefaultLegendContent 在渲染时才跳过它们；自定义内容必须自己跳过——
+  // 否则丢包系列（legendType="none"）会以「空条目 + 红方块」混进图例：
+  // 实测 9 条线路时图例变 18 项，手机端折成 180px 高，把 220px 的绘图区挤成一条线。
+  const entries = (payload ?? []).filter(item => item.type !== "none")
+
+  if (!entries.length) {
     return null
   }
 
@@ -298,12 +304,13 @@ function ChartLegendContent({
   return (
     <div
       className={cn(
-        "flex max-w-full flex-wrap items-center justify-center gap-x-3 gap-y-2 sm:gap-4",
+        // 手机端：单行横向滑动（折行会把绘图区挤塌）；≥sm 维持原来的自动折行居中
+        "scrollbar-none flex max-w-full flex-nowrap items-center justify-start gap-x-3 gap-y-2 overflow-x-auto sm:flex-wrap sm:justify-center sm:overflow-visible sm:gap-4",
         verticalAlign === "top" ? "pb-3" : "pt-3",
         className
       )}
     >
-      {payload.map((item, index) => {
+      {entries.map((item, index) => {
         const key = `${nameKey || item.dataKey || "value"}`
         const itemConfig = getPayloadConfigFromPayload(config, item, key)
         const dk = item.dataKey != null ? String(item.dataKey) : ""
@@ -313,7 +320,7 @@ function ChartLegendContent({
           <div
             key={dk || String(item.value)}
             className={cn(
-              "[&>svg]:text-muted-foreground flex min-h-9 max-w-full items-center gap-1.5 rounded px-1.5 text-xs [&>svg]:h-3 [&>svg]:w-3 sm:min-h-0 sm:px-0",
+              "shrink-0 [&>svg]:text-muted-foreground flex min-h-9 max-w-full items-center gap-1.5 rounded px-1.5 text-xs [&>svg]:h-3 [&>svg]:w-3 sm:min-h-0 sm:px-0",
               interactive && "cursor-pointer select-none transition-opacity",
               isInactive && "opacity-40 line-through decoration-muted-foreground/50"
             )}
