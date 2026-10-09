@@ -777,7 +777,7 @@ function NodeDetailView({
                         +{headChips.length - headFitCount}
                       </span>
                     </TooltipTrigger>
-                    <TooltipContent side="bottom" className="bg-popover text-popover-foreground border border-border/60 max-w-xs p-2 [&>svg]:bg-popover [&>svg]:fill-popover">
+                    <TooltipContent side="bottom" hideArrow className="bg-popover text-popover-foreground border border-border/60 max-w-xs p-2">
                       <div className="flex flex-col items-start gap-1">
                         {headChips.slice(headFitCount).map(item => renderHeadChip(item, 'overflow'))}
                       </div>

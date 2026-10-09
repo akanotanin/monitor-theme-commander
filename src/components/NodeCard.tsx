@@ -484,7 +484,7 @@ export const NodeCard = memo(function NodeCard({ node, onViewCharts }: NodeCardP
                         +{cardChips.length - cardFitCount}
                       </span>
                     </TooltipTrigger>
-                    <TooltipContent side="bottom" className="bg-popover text-popover-foreground border border-border/60 max-w-xs p-2 [&>svg]:bg-popover [&>svg]:fill-popover">
+                    <TooltipContent side="bottom" hideArrow className="bg-popover text-popover-foreground border border-border/60 max-w-xs p-2">
                       <div className="flex flex-col items-start gap-1">
                         {cardChips.slice(cardFitCount).map(item => renderCardChip(item, 'overflow'))}
                       </div>

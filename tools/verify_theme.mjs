@@ -99,7 +99,7 @@ try {
       ok: true,
       nowrap: cs.flexWrap === 'nowrap',
       clip: cs.overflowX === 'hidden' || cs.overflow === 'hidden',
-      text: (row.innerText || '').replace(/\s+/g, ' '),
+      text: (row.innerText || '').replace(/\\s+/g, ' '),
     })
   })()`)
   const headRow = JSON.parse(headRowInfo)
@@ -301,6 +301,13 @@ try {
   const tExp = tableRowInfo.ok ? tableRowInfo.text.indexOf('left') : -1
   const tRem = tableRowInfo.ok ? tableRowInfo.text.indexOf('CN2 GIA') : -1
   check('表格到期时间在备注之前', tExp !== -1 && tRem !== -1 && tExp < tRem, `exp@${tExp} rem@${tRem}`)
+  const tableRowLine = JSON.parse(await session.evaluate(`(() => {
+    const row = document.querySelector('table [data-accent="tablechips"]')
+    if (!row) return JSON.stringify({ ok: false })
+    const cs = getComputedStyle(row)
+    return JSON.stringify({ ok: true, nowrap: cs.flexWrap === 'nowrap', clip: cs.overflowX === 'hidden' })
+  })()`))
+  check('表格标签行单行（不换行 + 溢出裁切）', tableRowLine.ok === true && tableRowLine.nowrap === true && tableRowLine.clip === true, JSON.stringify(tableRowLine))
 
   check('能点击「可用性」视图', await clickViewTab(session, '可用性') === true)
   const uptimeUp = await session.waitFor(`!!document.querySelector('.uptime-status-strip')`, 20000)
@@ -389,9 +396,10 @@ finally {
       const tipInfo = JSON.parse(await priv.evaluate(`(() => {
         const tip = document.querySelector('[data-slot="tooltip-content"]')
         if (!tip) return JSON.stringify({ ok: false })
-        return JSON.stringify({ ok: true, chips: tip.querySelectorAll('.tag-pill-neutral, [data-private-remark]').length, text: (tip.innerText || '').replace(/\s+/g, ' ').slice(0, 60) })
+        return JSON.stringify({ ok: true, chips: tip.querySelectorAll('.tag-pill-neutral, [data-private-remark]').length, arrow: !!tip.querySelector('svg.rotate-45'), text: (tip.innerText || '').replace(/\\s+/g, ' ').slice(0, 60) })
       })()`))
       check('卡片 +N 悬浮层用芯片形态展示备注', tipInfo.ok === true && tipInfo.chips >= 1, `chips=${tipInfo.chips} "${tipInfo.text}"`)
+      check('卡片 +N 悬浮层无菱形箭头', tipInfo.ok === true && tipInfo.arrow === false, `arrow=${tipInfo.arrow}`)
     }
     check('卡片显示私有备注（可见或折进 +N 浮层）', privVisible > 0 || privInOverflow === true, `visible=${privVisible} overflow=${privInOverflow}`)
 
@@ -414,6 +422,8 @@ finally {
       await priv.waitFor(`document.body.innerText.includes('仅管理员可见的测试备注')`, 8000)
       const tipPriv = await priv.evaluate(`document.querySelectorAll('[data-slot="tooltip-content"] [data-private-remark]').length`)
       check('表格 +N 悬浮层以芯片展示私有备注', tipPriv >= 1, `tip=${tipPriv}`)
+      const tipArrow = await priv.evaluate(`!!document.querySelector('[data-slot="tooltip-content"] svg.rotate-45')`)
+      check('表格 +N 悬浮层无菱形箭头', tipArrow === false, `arrow=${tipArrow}`)
     }
     else {
       check('表格 +N 悬浮层以芯片展示私有备注', tRow.visible > 0, `visible=${tRow.visible}`)

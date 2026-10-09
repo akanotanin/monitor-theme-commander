@@ -1,4 +1,4 @@
-import { useMemo, memo, useState, useCallback, useEffect, useRef } from 'react';
+import { useMemo, memo, useState, useCallback, useEffect, useRef, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   useReactTable,
@@ -24,7 +24,8 @@ import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip';
 import { RegionFlag } from './RegionFlag';
 import { TagPill } from './TagPill';
 import { OfflineNodeState, OfflineTableCell } from './OfflineNodeState';
-import { buildTagChips, splitPrivateRemarkTags } from '@/lib/parseTags';
+import { buildTagChips, splitPrivateRemarkTags, type TagColor } from '@/lib/parseTags';
+import { useChipsFit } from '@/hooks/useChipsFit';
 import dayjs from 'dayjs';
 
 interface NodeTableProps {
@@ -293,10 +294,7 @@ const MobileRow = memo(function MobileRow({ node, isLast, onOpen, t, isLoggedIn 
   const expiryStatus = getExpiryStatus(node.expired_at, node.expires_in);
   const chipItems = buildTagChips(node.tags, node.public_remark);
   const privateChips = isLoggedIn ? splitPrivateRemarkTags(node.remark) : [];
-  const tagChips = [
-    ...chipItems.map(chip => ({ kind: 'public' as const, label: chip.label, color: chip.color, isRemark: !!chip.isRemark })),
-    ...privateChips.map(text => ({ kind: 'private' as const, label: text, color: null, isRemark: true })),
-  ];
+  const chips = buildTableChips(node, chipItems, privateChips, expiryStatus, t('node.hidden'));
 
   return (
     <div
@@ -321,92 +319,8 @@ const MobileRow = memo(function MobileRow({ node, isLast, onOpen, t, isLoggedIn 
             onClick={() => onOpen(node.uuid)}
           >{node.name}</button>
         </div>
-        {(node.group || tagChips.length > 0 || node.hidden || expiryStatus) && (
-          <div data-accent="tablechips" className="flex flex-wrap items-center gap-1 ml-0 sm:ml-4">
-            {node.group && (
-              <span className="text-xxs font-mono text-primary/85 bg-primary/15 px-1.5 py-0.5 rounded-sm">
-                {node.group}
-              </span>
-            )}
-            {expiryStatus && (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <span className={cn(
-                    'text-xxs font-mono px-1.5 py-0.5 rounded-sm cursor-default shrink-0',
-                    expiryStatus === 'expired'
-                      ? 'text-destructive/85 bg-destructive/15'
-                      : expiryStatus === 'warning'
-                        ? 'text-warning/85 bg-warning/15'
-                        : 'text-muted-foreground/55 bg-muted/35',
-                  )}>
-                    {formatExpiry(node.expired_at, node.expires_in)}
-                  </span>
-                </TooltipTrigger>
-                <TooltipContent side="bottom" className="whitespace-pre-line text-xs font-mono">
-                  {isLoggedIn
-                    ? t('label.expiryTooltipDetail', {
-                        date: dayjs(node.expired_at).format('YYYY-MM-DD HH:mm'),
-                        cycle: node.billing_cycle ?? '-',
-                        renewal: node.auto_renewal ? t('label.yes') : t('label.no'),
-                        price: node.price === -1 ? t('label.free') : node.price === 0 ? t('label.notSet') : `${node.currency}${node.price}`,
-                      })
-                    : t('label.expiryTooltip', {
-                        date: dayjs(node.expired_at).format('YYYY-MM-DD HH:mm'),
-                      })
-                  }
-                </TooltipContent>
-              </Tooltip>
-            )}
-            {tagChips.slice(0, 5).map((chip, i) =>
-              chip.kind === 'private' ? (
-                <span
-                  key={`p-${i}`}
-                  data-private-remark
-                  title={t('label.privateRemarkTip', { text: chip.label })}
-                  className="inline-flex items-center gap-1 text-xxs font-mono text-muted-foreground border border-border/60 px-1.5 py-0.5 rounded-sm"
-                >
-                  <Lock className="h-2.5 w-2.5 shrink-0" aria-hidden />
-                  <span className="max-w-[9rem] truncate">{chip.label}</span>
-                </span>
-              ) : (
-                <TagPill
-                  key={`t-${i}`}
-                  label={chip.label}
-                  color={chip.color}
-                  size="xs"
-                  className={chip.isRemark ? 'inline-block max-w-full truncate' : undefined}
-                />
-              ),
-            )}
-            {tagChips.length > 5 && (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <span className="text-xxs font-mono text-muted-foreground/55 bg-muted/35 px-1.5 py-0.5 rounded-sm cursor-default">
-                    +{tagChips.length - 5}
-                  </span>
-                </TooltipTrigger>
-                <TooltipContent side="bottom" className="bg-popover text-popover-foreground border border-border/60 max-w-xs p-2 [&>svg]:bg-popover [&>svg]:fill-popover">
-                  <div className="flex flex-col items-start gap-1">
-                    {tagChips.slice(5).map((chip, i) =>
-                      chip.kind === 'private' ? (
-                        <span key={`po-${i}`} data-private-remark className="inline-flex items-center gap-1 text-xxs font-mono text-muted-foreground border border-border/60 px-1.5 py-0.5 rounded-sm max-w-full">
-                          <Lock className="h-2.5 w-2.5 shrink-0" aria-hidden />
-                          <span className="break-words">{chip.label}</span>
-                        </span>
-                      ) : (
-                        <TagPill key={`to-${i}`} label={chip.label} color={chip.color} size="xs" className="inline-block max-w-full break-words" />
-                      ),
-                    )}
-                  </div>
-                </TooltipContent>
-              </Tooltip>
-            )}
-            {node.hidden && (
-              <span className="text-xxs font-mono text-warning/85 bg-warning/15 px-1.5 py-0.5 rounded-sm">
-                {t('node.hidden')}
-              </span>
-            )}
-          </div>
+        {chips.length > 0 && (
+          <TableChipsRow node={node} chips={chips} t={t} isLoggedIn={isLoggedIn} expiryStatus={expiryStatus} className="ml-0 sm:ml-4" />
         )}
       </div>
       {stats ? (
@@ -445,6 +359,209 @@ const MobileRow = memo(function MobileRow({ node, isLast, onOpen, t, isLoggedIn 
   prev.t === next.t &&
   prev.isLoggedIn === next.isLoggedIn,
 );
+
+type TableChipItem = {
+  key: string;
+  label: string;
+  kind: 'group' | 'expiry' | 'remark' | 'private' | 'hidden';
+  color?: TagColor | null;
+};
+
+function buildTableChips(
+  node: NodeWithStatus,
+  chipItems: { label: string; color: TagColor | null; isRemark?: boolean }[],
+  privateChips: string[],
+  expiryStatus: ReturnType<typeof getExpiryStatus>,
+  hiddenLabel: string,
+): TableChipItem[] {
+  return [
+    ...(node.group ? [{ key: `grp-${node.group}`, label: node.group, kind: 'group' as const }] : []),
+    ...(expiryStatus ? [{ key: `exp-${node.expired_at}`, label: formatExpiry(node.expired_at, node.expires_in), kind: 'expiry' as const }] : []),
+    ...chipItems.map((chip, i) => ({ key: `rem-${i}-${chip.label}`, label: chip.label, kind: 'remark' as const, color: chip.color })),
+    ...privateChips.map((text, i) => ({ key: `prv-${i}-${text}`, label: text, kind: 'private' as const })),
+    ...(node.hidden ? [{ key: 'hidden', label: hiddenLabel, kind: 'hidden' as const }] : []),
+  ];
+}
+
+function renderTableChip(
+  item: TableChipItem,
+  ctx: {
+    mode: 'row' | 'overflow';
+    node: NodeWithStatus;
+    t: (k: string, p?: Record<string, unknown>) => string;
+    isLoggedIn: boolean;
+    expiryStatus: ReturnType<typeof getExpiryStatus>;
+  },
+) {
+  const { mode, node, t, isLoggedIn, expiryStatus } = ctx;
+  let inner: ReactNode;
+  if (item.kind === 'group') {
+    inner = <span className="text-xxs font-mono text-primary/85 bg-primary/15 px-1.5 py-0.5 rounded-sm">{item.label}</span>;
+  } else if (item.kind === 'expiry') {
+    inner = (
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <span className={cn(
+            'text-xxs font-mono px-1.5 py-0.5 rounded-sm cursor-default shrink-0',
+            expiryStatus === 'expired'
+              ? 'text-destructive/85 bg-destructive/15'
+              : expiryStatus === 'warning'
+                ? 'text-warning/85 bg-warning/15'
+                : 'text-muted-foreground/55 bg-muted/35',
+          )}>
+            {formatExpiry(node.expired_at, node.expires_in)}
+          </span>
+        </TooltipTrigger>
+        <TooltipContent side="bottom" className="whitespace-pre-line text-xs font-mono">
+          {isLoggedIn
+            ? t('label.expiryTooltipDetail', {
+                date: dayjs(node.expired_at).format('YYYY-MM-DD HH:mm'),
+                cycle: node.billing_cycle ?? '-',
+                renewal: node.auto_renewal ? t('label.yes') : t('label.no'),
+                price: node.price === -1 ? t('label.free') : node.price === 0 ? t('label.notSet') : `${node.currency}${node.price}`,
+              })
+            : t('label.expiryTooltip', {
+                date: dayjs(node.expired_at).format('YYYY-MM-DD HH:mm'),
+              })
+          }
+        </TooltipContent>
+      </Tooltip>
+    );
+  } else if (item.kind === 'remark') {
+    inner = (
+      <TagPill
+        label={item.label}
+        color={item.color ?? null}
+        size="xs"
+        className={mode === 'overflow' ? 'inline-block max-w-full break-words' : 'inline-block max-w-full truncate'}
+      />
+    );
+  } else if (item.kind === 'private') {
+    inner = (
+      <span
+        data-private-remark
+        title={t('label.privateRemarkTip', { text: item.label })}
+        className={cn(
+          'inline-flex items-center gap-1 text-xxs font-mono text-muted-foreground border border-border/60 px-1.5 py-0.5 rounded-sm',
+          mode === 'overflow' ? 'max-w-full' : 'max-w-[9rem]',
+        )}
+      >
+        <Lock className="h-2.5 w-2.5 shrink-0" aria-hidden />
+        <span className={mode === 'overflow' ? 'break-words' : 'truncate'}>{item.label}</span>
+      </span>
+    );
+  } else {
+    inner = <span className="text-xxs font-mono text-warning/85 bg-warning/15 px-1.5 py-0.5 rounded-sm">{item.label}</span>;
+  }
+  return (
+    <span key={item.key} data-chip-key={item.key} className="flex items-center shrink-0">
+      {inner}
+    </span>
+  );
+}
+
+/** 表格标签行：单行显示（分组 + 到期 + 公开/私有备注 + 隐藏），放不下的折进「+N」悬浮层（芯片形态） */
+function TableChipsRow({
+  node,
+  chips,
+  t,
+  isLoggedIn,
+  expiryStatus,
+  className,
+}: {
+  node: NodeWithStatus;
+  chips: TableChipItem[];
+  t: (k: string, p?: Record<string, unknown>) => string;
+  isLoggedIn: boolean;
+  expiryStatus: ReturnType<typeof getExpiryStatus>;
+  className?: string;
+}) {
+  const { rowRef, measureRef, fitCount } = useChipsFit();
+  const render = (item: TableChipItem, mode: 'row' | 'overflow' = 'row') =>
+    renderTableChip(item, { mode, node, t, isLoggedIn, expiryStatus });
+
+  return (
+    <div className={cn('relative min-w-0', className)}>
+      <div ref={rowRef} data-accent="tablechips" className="flex items-center gap-1 overflow-hidden whitespace-nowrap">
+        {chips.slice(0, fitCount).map(item => render(item))}
+        {chips.length > fitCount && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span className="text-xxs font-mono text-muted-foreground/55 bg-muted/35 px-1.5 py-0.5 rounded-sm cursor-default shrink-0">
+                +{chips.length - fitCount}
+              </span>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" hideArrow className="bg-popover text-popover-foreground border border-border/60 max-w-xs p-2">
+              <div className="flex flex-col items-start gap-1">
+                {chips.slice(fitCount).map(item => render(item, 'overflow'))}
+              </div>
+            </TooltipContent>
+          </Tooltip>
+        )}
+      </div>
+      {/* 量宽用的隐形行：内容与真行一致，不参与布局 */}
+      <div ref={measureRef} aria-hidden className="invisible pointer-events-none absolute left-0 right-0 top-0 flex items-center gap-1 overflow-hidden whitespace-nowrap">
+        {chips.map(item => render(item))}
+      </div>
+    </div>
+  );
+}
+
+interface NodeCellProps {
+  node: NodeWithStatus;
+  onOpen: (uuid: string) => void;
+  t: (k: string, p?: Record<string, unknown>) => string;
+  isLoggedIn: boolean;
+}
+
+const NodeCell = memo(function NodeCell({ node, onOpen, t, isLoggedIn }: NodeCellProps) {
+  const expiryStatus = getExpiryStatus(node.expired_at, node.expires_in);
+  const chipItems = buildTagChips(node.tags, node.public_remark);
+  const privateChips = isLoggedIn ? splitPrivateRemarkTags(node.remark) : [];
+  const chips = buildTableChips(node, chipItems, privateChips, expiryStatus, t('node.hidden'));
+  const platformLine = [
+    node.os,
+    [node.virtualization, node.arch].filter(Boolean).join('/'),
+  ].filter(Boolean).join(' · ');
+
+  return (
+    <div className="min-w-0 space-y-1">
+      {/* Row 1: flag · node name */}
+      <div className="flex items-center gap-2 min-w-0">
+        <RegionFlag region={node.region} size="sm" />
+        <button
+          type="button"
+          className="node-name text-base truncate cursor-pointer text-foreground hover:text-primary hover:underline underline-offset-4 decoration-primary/40 transition-colors text-left"
+          onClick={() => onOpen(node.uuid)}
+        >
+          {node.name}
+        </button>
+      </div>
+
+      {/* Row 2: 分组 + 到期 + 备注（单行，放不下的折进 +N 悬浮层） */}
+      {chips.length > 0 && (
+        <TableChipsRow node={node} chips={chips} t={t} isLoggedIn={isLoggedIn} expiryStatus={expiryStatus} />
+      )}
+
+      {/* Row 3: platform identity. Resource totals live in metric columns. */}
+      {platformLine && (
+        <div className="min-w-0 space-y-1 text-xs text-muted-foreground/65">
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span className="inline-flex max-w-full min-w-0 items-center gap-1 cursor-default">
+                <SystemIcon kind="os" value={node.os} className="h-2.5 w-2.5 shrink-0 opacity-70" />
+                <span className="min-w-0 truncate">{platformLine}</span>
+              </span>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" className="max-w-xs text-xs font-mono whitespace-pre-line">
+              {[node.os && `OS: ${node.os}`, node.arch && `Arch: ${node.arch}`, node.virtualization && `Virt: ${node.virtualization}`, node.kernel_version && `Kernel: ${node.kernel_version}`].filter(Boolean).join('\n')}
+            </TooltipContent>
+          </Tooltip>
+        </div>
+      )}
+    </div>
+  );
+});
 
 export function NodeTable({ nodes }: NodeTableProps) {
   const { t } = useTranslation();
@@ -518,144 +635,7 @@ export function NodeTable({ nodes }: NodeTableProps) {
       header: t('table.node'),
       size: 280,
       enableSorting: true,
-      cell: ({ row }) => {
-        const node = row.original;
-        const expiryStatus = getExpiryStatus(node.expired_at, node.expires_in);
-        const chipItems = buildTagChips(node.tags, node.public_remark);
-        const privateChips = isLoggedIn ? splitPrivateRemarkTags(node.remark) : [];
-        const tagChips = [
-          ...chipItems.map(chip => ({ kind: 'public' as const, label: chip.label, color: chip.color, isRemark: !!chip.isRemark })),
-          ...privateChips.map(text => ({ kind: 'private' as const, label: text, color: null, isRemark: true })),
-        ];
-        const platformLine = [
-          node.os,
-          [node.virtualization, node.arch].filter(Boolean).join('/'),
-        ].filter(Boolean).join(' · ');
-
-        return (
-          <div className="min-w-0 space-y-1">
-            {/* Row 1: flag · node name */}
-            <div className="flex items-center gap-2 min-w-0">
-              <RegionFlag region={node.region} size="sm" />
-              <button
-                type="button"
-                className="node-name text-base truncate cursor-pointer text-foreground hover:text-primary hover:underline underline-offset-4 decoration-primary/40 transition-colors text-left"
-                onClick={() => openNode(node.uuid)}
-              >
-                {node.name}
-              </button>
-            </div>
-
-            {/* Row 2: group + tags + hidden + expiry */}
-            {(node.group || tagChips.length > 0 || node.hidden || expiryStatus) && (
-              <div data-accent="tablechips" className="flex flex-wrap items-center gap-1">
-                {node.group && (
-                  <span className="text-xxs font-mono text-primary/85 bg-primary/15 px-1.5 py-0.5 rounded-sm shrink-0">
-                    {node.group}
-                  </span>
-                )}
-                {expiryStatus && (
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <span
-                        className={cn(
-                          'text-xxs font-mono px-1.5 py-0.5 rounded-sm cursor-default shrink-0',
-                          expiryStatus === 'expired'
-                            ? 'text-destructive/85 bg-destructive/15'
-                            : expiryStatus === 'warning'
-                              ? 'text-warning/85 bg-warning/15'
-                              : 'text-muted-foreground/55 bg-muted/35',
-                        )}
-                      >
-                        {formatExpiry(node.expired_at, node.expires_in)}
-                      </span>
-                    </TooltipTrigger>
-                    <TooltipContent side="bottom" className="whitespace-pre-line text-xs font-mono">
-                      {isLoggedIn
-                        ? t('label.expiryTooltipDetail', {
-                            date: dayjs(node.expired_at).format('YYYY-MM-DD HH:mm'),
-                            cycle: node.billing_cycle ?? '-',
-                            renewal: node.auto_renewal ? t('label.yes') : t('label.no'),
-                            price: node.price === -1 ? t('label.free') : node.price === 0 ? t('label.notSet') : `${node.currency}${node.price}`,
-                          })
-                        : t('label.expiryTooltip', {
-                            date: dayjs(node.expired_at).format('YYYY-MM-DD HH:mm'),
-                          })
-                      }
-                    </TooltipContent>
-                  </Tooltip>
-                )}
-                {tagChips.slice(0, 3).map((chip, i) =>
-                  chip.kind === 'private' ? (
-                    <span
-                      key={`p-${i}`}
-                      data-private-remark
-                      title={t('label.privateRemarkTip', { text: chip.label })}
-                      className="inline-flex items-center gap-1 text-xxs font-mono text-muted-foreground border border-border/60 px-1.5 py-0.5 rounded-sm shrink-0"
-                    >
-                      <Lock className="h-2.5 w-2.5 shrink-0" aria-hidden />
-                      <span className="max-w-[9rem] truncate">{chip.label}</span>
-                    </span>
-                  ) : (
-                    <TagPill
-                      key={`t-${i}`}
-                      label={chip.label}
-                      color={chip.color}
-                      size="xs"
-                      className={chip.isRemark ? 'inline-block max-w-full truncate' : undefined}
-                    />
-                  ),
-                )}
-                {tagChips.length > 3 && (
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <span className="text-xxs font-mono text-muted-foreground/55 bg-muted/35 px-1.5 py-0.5 rounded-sm cursor-default shrink-0">
-                        +{tagChips.length - 3}
-                      </span>
-                    </TooltipTrigger>
-                    <TooltipContent side="bottom" className="bg-popover text-popover-foreground border border-border/60 max-w-xs p-2 [&>svg]:bg-popover [&>svg]:fill-popover">
-                      <div className="flex flex-col items-start gap-1">
-                        {tagChips.slice(3).map((chip, i) =>
-                          chip.kind === 'private' ? (
-                            <span key={`po-${i}`} data-private-remark className="inline-flex items-center gap-1 text-xxs font-mono text-muted-foreground border border-border/60 px-1.5 py-0.5 rounded-sm max-w-full">
-                              <Lock className="h-2.5 w-2.5 shrink-0" aria-hidden />
-                              <span className="break-words">{chip.label}</span>
-                            </span>
-                          ) : (
-                            <TagPill key={`to-${i}`} label={chip.label} color={chip.color} size="xs" className="inline-block max-w-full break-words" />
-                          ),
-                        )}
-                      </div>
-                    </TooltipContent>
-                  </Tooltip>
-                )}
-                {node.hidden && (
-                  <span className="text-xxs font-mono text-warning/85 bg-warning/15 px-1.5 py-0.5 rounded-sm shrink-0">
-                    {t('node.hidden')}
-                  </span>
-                )}
-              </div>
-            )}
-
-            {/* Row 3: platform identity. Resource totals live in metric columns. */}
-            {platformLine && (
-              <div className="min-w-0 space-y-1 text-xs text-muted-foreground/65">
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <span className="inline-flex max-w-full min-w-0 items-center gap-1 cursor-default">
-                      <SystemIcon kind="os" value={node.os} className="h-2.5 w-2.5 shrink-0 opacity-70" />
-                      <span className="min-w-0 truncate">{platformLine}</span>
-                    </span>
-                  </TooltipTrigger>
-                  <TooltipContent side="bottom" className="max-w-xs text-xs font-mono whitespace-pre-line">
-                    {[node.os && `OS: ${node.os}`, node.arch && `Arch: ${node.arch}`, node.virtualization && `Virt: ${node.virtualization}`, node.kernel_version && `Kernel: ${node.kernel_version}`].filter(Boolean).join('\n')}
-                  </TooltipContent>
-                </Tooltip>
-              </div>
-            )}
-          </div>
-        );
-      },
+      cell: ({ row }) => <NodeCell node={row.original} onOpen={openNode} t={t} isLoggedIn={isLoggedIn} />,
     }),
 
     columnHelper.accessor(
