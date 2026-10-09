@@ -656,7 +656,7 @@ function NodeDetailView({
   ];
   const { rowRef: headRowRef, measureRef: headMeasureRef, fitCount: headFitCount } = useChipsFit();
 
-  const renderHeadChip = (item: HeadChipItem) => {
+  const renderHeadChip = (item: HeadChipItem, mode: 'row' | 'overflow' = 'row') => {
     let inner: ReactNode;
     if (item.kind === 'expiry') {
       const expiryStatus = getExpiryStatus(node.expired_at, node.expires_in);
@@ -685,16 +685,19 @@ function NodeDetailView({
     } else if (item.kind === 'group') {
       inner = <span className="text-xs font-mono text-primary/80 bg-primary/15 px-1.5 py-0.5 rounded-sm">{item.label}</span>;
     } else if (item.kind === 'remark') {
-      inner = <TagPill label={item.label} color={item.color ?? null} size="sm" className="inline-block max-w-[9rem] truncate" />;
+      inner = <TagPill label={item.label} color={item.color ?? null} size="sm" className={mode === 'overflow' ? 'inline-block max-w-full break-words' : 'inline-block max-w-[9rem] truncate'} />;
     } else {
       inner = (
         <span
           data-private-remark
           title={t('label.privateRemarkTip', { text: item.label })}
-          className="inline-flex items-center gap-1 text-xs font-mono text-muted-foreground border border-border/60 px-1.5 py-0.5 rounded-sm max-w-[9rem]"
+          className={cn(
+            'inline-flex items-center gap-1 text-xs font-mono text-muted-foreground border border-border/60 px-1.5 py-0.5 rounded-sm',
+            mode === 'overflow' ? 'max-w-full' : 'max-w-[9rem]',
+          )}
         >
           <Lock className="h-3 w-3 shrink-0" aria-hidden />
-          <span className="truncate">{item.label}</span>
+          <span className={mode === 'overflow' ? 'break-words' : 'truncate'}>{item.label}</span>
         </span>
       );
     }
@@ -763,7 +766,7 @@ function NodeDetailView({
           {headChips.length > 0 && (
             <div className="relative min-w-0">
               <div ref={headRowRef} data-accent="headchips" className="flex items-center gap-1 overflow-hidden whitespace-nowrap">
-                {headChips.slice(0, headFitCount).map(renderHeadChip)}
+                {headChips.slice(0, headFitCount).map(item => renderHeadChip(item))}
                 {headChips.length > headFitCount && (
                   <Tooltip>
                     <TooltipTrigger asChild>
@@ -771,15 +774,17 @@ function NodeDetailView({
                         +{headChips.length - headFitCount}
                       </span>
                     </TooltipTrigger>
-                    <TooltipContent side="bottom" className="whitespace-pre-line text-xs font-mono max-w-xs">
-                      {headChips.slice(headFitCount).map(item => item.label).join('\n')}
+                    <TooltipContent side="bottom" className="bg-popover text-popover-foreground border border-border/60 max-w-xs p-2 [&>svg]:bg-popover [&>svg]:fill-popover">
+                      <div className="flex flex-col items-start gap-1">
+                        {headChips.slice(headFitCount).map(item => renderHeadChip(item, 'overflow'))}
+                      </div>
                     </TooltipContent>
                   </Tooltip>
                 )}
               </div>
               {/* 量宽用的隐形行：内容与真行一致，不参与布局 */}
               <div ref={headMeasureRef} aria-hidden className="invisible pointer-events-none absolute left-0 right-0 top-0 flex items-center gap-1 overflow-hidden whitespace-nowrap">
-                {headChips.map(renderHeadChip)}
+                {headChips.map(item => renderHeadChip(item))}
               </div>
             </div>
           )}

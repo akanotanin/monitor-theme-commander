@@ -350,7 +350,7 @@ export const NodeCard = memo(function NodeCard({ node }: NodeCardProps) {
   ];
   const { rowRef: cardRowRef, measureRef: cardMeasureRef, fitCount: cardFitCount } = useChipsFit();
 
-  const renderCardChip = (item: CardChipItem) => {
+  const renderCardChip = (item: CardChipItem, mode: 'row' | 'overflow' = 'row') => {
     let inner: ReactNode;
     if (item.kind === 'group') {
       inner = <span className="text-xs font-mono text-primary/80 bg-primary/15 px-1.5 py-0.5 rounded-sm">{item.label}</span>;
@@ -385,16 +385,19 @@ export const NodeCard = memo(function NodeCard({ node }: NodeCardProps) {
         </Tooltip>
       );
     } else if (item.kind === 'remark') {
-      inner = <TagPill label={item.label} color={item.color ?? null} size="sm" className="inline-block max-w-[9rem] truncate" />;
+      inner = <TagPill label={item.label} color={item.color ?? null} size="sm" className={mode === 'overflow' ? 'inline-block max-w-full break-words' : 'inline-block max-w-[9rem] truncate'} />;
     } else if (item.kind === 'private') {
       inner = (
         <span
           data-private-remark
           title={t('label.privateRemarkTip', { text: item.label })}
-          className="inline-flex items-center gap-1 text-xs font-mono text-muted-foreground border border-border/60 px-1.5 py-0.5 rounded-sm max-w-[9rem]"
+          className={cn(
+            'inline-flex items-center gap-1 text-xs font-mono text-muted-foreground border border-border/60 px-1.5 py-0.5 rounded-sm',
+            mode === 'overflow' ? 'max-w-full' : 'max-w-[9rem]',
+          )}
         >
           <Lock className="h-3 w-3 shrink-0" aria-hidden />
-          <span className="truncate">{item.label}</span>
+          <span className={mode === 'overflow' ? 'break-words' : 'truncate'}>{item.label}</span>
         </span>
       );
     } else {
@@ -460,7 +463,7 @@ export const NodeCard = memo(function NodeCard({ node }: NodeCardProps) {
           {cardChips.length > 0 && (
             <div className="relative min-w-0 ml-0 sm:ml-4">
               <div ref={cardRowRef} data-accent="cardchips" className="flex items-center gap-1.5 sm:gap-2 overflow-hidden whitespace-nowrap">
-                {cardChips.slice(0, cardFitCount).map(renderCardChip)}
+                {cardChips.slice(0, cardFitCount).map(item => renderCardChip(item))}
                 {cardChips.length > cardFitCount && (
                   <Tooltip>
                     <TooltipTrigger asChild>
@@ -468,15 +471,17 @@ export const NodeCard = memo(function NodeCard({ node }: NodeCardProps) {
                         +{cardChips.length - cardFitCount}
                       </span>
                     </TooltipTrigger>
-                    <TooltipContent side="bottom" className="whitespace-pre-line text-xs font-mono max-w-xs">
-                      {cardChips.slice(cardFitCount).map(item => item.label).join('\n')}
+                    <TooltipContent side="bottom" className="bg-popover text-popover-foreground border border-border/60 max-w-xs p-2 [&>svg]:bg-popover [&>svg]:fill-popover">
+                      <div className="flex flex-col items-start gap-1">
+                        {cardChips.slice(cardFitCount).map(item => renderCardChip(item, 'overflow'))}
+                      </div>
                     </TooltipContent>
                   </Tooltip>
                 )}
               </div>
               {/* 量宽用的隐形行：内容与真行一致，不参与布局 */}
               <div ref={cardMeasureRef} aria-hidden className="invisible pointer-events-none absolute left-0 right-0 top-0 flex items-center gap-1.5 sm:gap-2 overflow-hidden whitespace-nowrap">
-                {cardChips.map(renderCardChip)}
+                {cardChips.map(item => renderCardChip(item))}
               </div>
             </div>
           )}

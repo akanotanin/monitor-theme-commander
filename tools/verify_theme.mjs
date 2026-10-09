@@ -336,21 +336,25 @@ finally {
     check('卡片到期时间在所有备注之前', expIdx !== -1 && remIdx !== -1 && expIdx < remIdx, `exp@${expIdx} rem@${remIdx} [${cardRowInfo.texts.join(' / ')}]`)
     const privVisible = await priv.evaluate(`document.querySelectorAll('.node-card-commander [data-accent="cardchips"] [data-private-remark]').length`)
     let privInOverflow = false
-    if (privVisible === 0) {
-      const hasPlus = await priv.evaluate(`(() => {
-        const row = document.querySelector('.node-card-commander [data-accent="cardchips"]')
-        const plus = row ? [...row.children].find(e => (e.innerText || '').startsWith('+')) : null
-        if (!plus) return false
-        const r = plus.getBoundingClientRect()
-        window.__plusBox = { x: r.x + r.width / 2, y: r.y + r.height / 2 }
-        return true
-      })()`)
-      if (hasPlus) {
-        const box = JSON.parse(await priv.evaluate(`JSON.stringify(window.__plusBox)`))
-        await priv.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: box.x, y: box.y })
-        await priv.waitFor(`document.body.innerText.includes('仅管理员可见的测试备注')`, 8000)
-        privInOverflow = await priv.evaluate(`document.body.innerText.includes('仅管理员可见的测试备注')`)
-      }
+    const hasPlus = await priv.evaluate(`(() => {
+      const row = document.querySelector('.node-card-commander [data-accent="cardchips"]')
+      const plus = row ? [...row.children].find(e => (e.innerText || '').startsWith('+')) : null
+      if (!plus) return false
+      const r = plus.getBoundingClientRect()
+      window.__plusBox = { x: r.x + r.width / 2, y: r.y + r.height / 2 }
+      return true
+    })()`)
+    if (hasPlus) {
+      const box = JSON.parse(await priv.evaluate(`JSON.stringify(window.__plusBox)`))
+      await priv.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: box.x, y: box.y })
+      await priv.waitFor(`document.body.innerText.includes('仅管理员可见的测试备注')`, 8000)
+      privInOverflow = await priv.evaluate(`document.body.innerText.includes('仅管理员可见的测试备注')`)
+      const tipInfo = JSON.parse(await priv.evaluate(`(() => {
+        const tip = document.querySelector('[data-slot="tooltip-content"]')
+        if (!tip) return JSON.stringify({ ok: false })
+        return JSON.stringify({ ok: true, chips: tip.querySelectorAll('.tag-pill-neutral, [data-private-remark]').length, text: (tip.innerText || '').replace(/\s+/g, ' ').slice(0, 60) })
+      })()`))
+      check('卡片 +N 悬浮层用芯片形态展示备注', tipInfo.ok === true && tipInfo.chips >= 1, `chips=${tipInfo.chips} "${tipInfo.text}"`)
     }
     check('卡片显示私有备注（可见或折进 +N 浮层）', privVisible > 0 || privInOverflow === true, `visible=${privVisible} overflow=${privInOverflow}`)
     await clickSelector(priv, '.node-card-commander .node-name')
