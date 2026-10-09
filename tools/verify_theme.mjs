@@ -81,6 +81,19 @@ try {
   check('首访默认视图是「地球」', globe)
   const canvas = await session.waitFor(`!!document.querySelector('canvas')`, 15000)
   check('地球视图渲染出 canvas（WebGL）', canvas)
+  // ⑯ rich 档速率胶囊：常显 + 国旗 + ↑/↓ 读数
+  const pillUp = await session.waitFor(`document.querySelectorAll('.globe-region-speed').length > 0`, 25000)
+  check('地球 rich 档出现速率胶囊', pillUp === true)
+  const pillInfo = JSON.parse(await session.evaluate(`(() => {
+    const pills = [...document.querySelectorAll('.globe-region-speed')]
+    const withFlag = pills.filter(p => !!p.querySelector('.globe-region-speed-flag'))
+    const textOk = pills.filter(p => { const s = p.innerText || ''; return s.includes('↑') && s.includes('↓') })
+    return JSON.stringify({ count: pills.length, flags: withFlag.length, textOk: textOk.length })
+  })()`))
+  check('速率胶囊含国旗与 ↑/↓ 速率', pillInfo.flags >= 1 && pillInfo.textOk >= 1, JSON.stringify(pillInfo))
+  const pillVisible = await session.waitFor(`[...document.querySelectorAll('.globe-region-speed')].some(p => parseFloat(getComputedStyle(p).opacity) > 0.05)`, 30000)
+  check('至少一枚速率胶囊当前可见（正面半球）', pillVisible === true)
+
   await sleep(600)
   await session.screenshot('shots/desktop-globe.png')
   console.log('  已截图 shots/desktop-globe.png')

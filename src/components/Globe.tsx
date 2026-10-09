@@ -109,9 +109,10 @@ const THEME_CONFIG = {
     diffuse: 1.2,
     markerElevation: 0,
     scale: 1.0,
-    // Clean stays visually minimal — no telemetry arcs even when a hub
-    // is configured. Admins who want arcs should use lumina/deepspace.
-    enableArcs: false,
+    // Clean now draws hub-and-spoke arcs too (soft blue tint). They only
+    // appear when the admin sets 地球中枢节点, so the default view stays
+    // minimal; previously the whole theme suppressed them.
+    enableArcs: true,
   },
 };
 
@@ -1082,9 +1083,9 @@ export const Globe = forwardRef<GlobeHandle, GlobeProps>(function Globe(
           />,
           cobeWrapper
         ))}
-        {/* Per-marker speed pill — rich mode only while hub-and-spoke arcs
-            are active. */}
-        {markerStyle === 'rich' && cobeWrapper && globeReady && hubRegionId && regionMarkers
+        {/* Per-marker speed pill — always on in the rich tier (arcs are
+            optional; the live ↑/↓ read is the point). */}
+        {markerStyle === 'rich' && cobeWrapper && globeReady && regionMarkers
           .filter(region => region.status !== 'offline')
           .map(region => createPortal(
             <RegionSpeedOverlay
@@ -1093,6 +1094,7 @@ export const Globe = forwardRef<GlobeHandle, GlobeProps>(function Globe(
               up={fmtSpeedCompact(region.netUp)}
               down={fmtSpeedCompact(region.netDown)}
               isHub={region.id === hubRegionId}
+              emoji={region.emoji}
             />,
             cobeWrapper
           ))}
@@ -1231,6 +1233,8 @@ interface RegionSpeedOverlayProps {
   /** Hub marker is visually larger (48px vs 34px), so its pill needs a
    *  bigger offset to stay clear of the southern crosshair tick. */
   isHub: boolean;
+  /** Region flag emoji — small badge at the pill's left edge. */
+  emoji: string;
 }
 
 /** Compact byte-rate formatter — matches `GlobeTelemetryFeed`'s `fmtSpeed`
@@ -1248,6 +1252,7 @@ const RegionSpeedOverlay = memo(function RegionSpeedOverlay({
   up,
   down,
   isHub,
+  emoji,
 }: RegionSpeedOverlayProps) {
   const style = {
     positionAnchor: `--cobe-${regionId}`,
@@ -1260,6 +1265,9 @@ const RegionSpeedOverlay = memo(function RegionSpeedOverlay({
       style={style}
       aria-hidden
     >
+      <span className="globe-region-speed-flag" aria-hidden>
+        <FlagBadge region={emoji} size={11} />
+      </span>
       <span className="globe-region-speed-up">↑{up}</span>
       <span className="globe-region-speed-sep" aria-hidden />
       <span className="globe-region-speed-down">↓{down}</span>

@@ -3813,6 +3813,14 @@
   /* Upload uses the success/chart-2 hue; download uses the primary/chart-1
      hue. Mirrors the conventions in NodeCard / NodeTable / sidebar so the
      same arrow + color pair always means the same direction. */
+  /* Region flag inside the pill (emerald-style marker identity) */
+  .globe-region-speed-flag {
+    display: inline-flex;
+    align-items: center;
+    line-height: 0;
+    opacity: 0.95;
+  }
+
   .globe-region-speed-up {
     color: color-mix(in oklch, var(--chart-2, var(--success)) 92%, var(--foreground));
   }

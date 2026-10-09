@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildPingSparkline, processPingRecords, type PingRecord, type TaskInfo } from './chart-utils';
+import { buildPingSparkline, pickPingLine, processPingRecords, type PingRecord, type TaskInfo } from './chart-utils';
 
 const t0 = Date.parse('2026-10-09T00:00:00Z');
 const rec = (task: number, minute: number, value: number): PingRecord => ({
@@ -7,6 +7,17 @@ const rec = (task: number, minute: number, value: number): PingRecord => ({
   task_id: task,
   time: new Date(t0 + minute * 60_000).toISOString(),
   value,
+});
+
+describe('pickPingLine', () => {
+  it('takes the first non-empty token from newline / comma / 顿号 separated lists', () => {
+    expect(pickPingLine('')).toBeNull();
+    expect(pickPingLine('  \n  ')).toBeNull();
+    expect(pickPingLine('美西 · 一毫秒')).toBe('美西 · 一毫秒');
+    expect(pickPingLine('北京电信，北京联通，北京移动')).toBe('北京电信');
+    expect(pickPingLine('\n 东京 · CF \n 美西 · 一毫秒')).toBe('东京 · CF');
+    expect(pickPingLine('北京电信、北京联通')).toBe('北京电信');
+  });
 });
 
 describe('processPingRecords loss markers', () => {

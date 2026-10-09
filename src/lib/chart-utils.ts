@@ -257,8 +257,9 @@ export function interpolatePingNulls(
  */
 export function pickPingLine(raw: string | null | undefined): string | null {
   if (!raw) return null;
-  for (const line of raw.split('\n')) {
-    const name = line.trim();
+  // 一行一个任务名；也容忍用逗号/顿号/分号连着写（取第一个非空段）
+  for (const part of raw.split(/[\n,，;；、]/)) {
+    const name = part.trim();
     if (name) return name;
   }
   return null;
