@@ -308,6 +308,45 @@ try {
     return JSON.stringify({ ok: true, nowrap: cs.flexWrap === 'nowrap', clip: cs.overflowX === 'hidden' })
   })()`))
   check('表格标签行单行（不换行 + 溢出裁切）', tableRowLine.ok === true && tableRowLine.nowrap === true && tableRowLine.clip === true, JSON.stringify(tableRowLine))
+  const tableFirstChip = await session.evaluate(`(() => {
+    const row = document.querySelector('table [data-accent="tablechips"]')
+    const chip = row ? row.querySelector('[data-chip-key]') : null
+    return chip ? (chip.getAttribute('data-chip-key') || '') : ''
+  })()`)
+  check('表格到期芯片排在分组之前', tableFirstChip.startsWith('exp-'), tableFirstChip)
+
+  // 表格行点击 → 就地展开延迟面板（参照 jikasei 紧凑模式）
+  const rowBox = JSON.parse(await session.evaluate(`(() => {
+    const row = document.querySelector('table tbody tr:not([aria-hidden])')
+    if (!row) return JSON.stringify({ ok: false })
+    const r = row.getBoundingClientRect()
+    return JSON.stringify({ ok: true, x: r.x + r.width * 0.5, y: r.y + r.height / 2 })
+  })()`))
+  check('表格有可点击的数据行', rowBox.ok === true)
+  if (rowBox.ok) {
+    await session.send('Input.dispatchMouseEvent', { type: 'mousePressed', x: rowBox.x, y: rowBox.y, button: 'left', clickCount: 1 })
+    await session.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: rowBox.x, y: rowBox.y, button: 'left', clickCount: 1 })
+  }
+  const panelUp = await session.waitFor(`!!document.querySelector('[data-accent="table-panel"]')`, 15000)
+  check('表格行点击展开延迟面板', panelUp === true)
+  const panelChart = await session.waitFor(
+    `[...document.querySelectorAll('[data-accent="table-panel"] .recharts-surface path')].some(p => (p.getAttribute('d') || '').length > 100)`,
+    45000,
+  )
+  check('延迟面板画出曲线', panelChart === true)
+  const panelTabs = await session.evaluate(`[...document.querySelectorAll('[data-accent="table-panel"] button')].map(b => (b.innerText || '').trim()).filter(Boolean)`)
+  check('延迟面板有 1H/6H/24H/7D 档位', ['1H', '6H', '24H', '7D'].every(x => panelTabs.includes(x)), panelTabs.join(' / '))
+  await session.evaluate(`(() => { const b = [...document.querySelectorAll('[data-accent="table-panel"] button')].find(x => x.innerText.trim() === '24H'); if (b) b.click(); return !!b })()`)
+  await sleep(900)
+  const tab24 = await session.evaluate(`(() => { const b = [...document.querySelectorAll('[data-accent="table-panel"] button')].find(x => x.innerText.trim() === '24H'); return !!b && b.className.includes('bg-primary') })()`)
+  check('延迟面板可切换时间档（24H 选中态）', tab24 === true)
+  await session.screenshot('shots/table-expand-panel.png')
+  if (rowBox.ok) {
+    await session.send('Input.dispatchMouseEvent', { type: 'mousePressed', x: rowBox.x, y: rowBox.y, button: 'left', clickCount: 1 })
+    await session.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: rowBox.x, y: rowBox.y, button: 'left', clickCount: 1 })
+  }
+  const panelClosed = await session.waitFor(`!document.querySelector('[data-accent="table-panel"]')`, 10000)
+  check('再点行可收起延迟面板', panelClosed === true)
 
   check('能点击「可用性」视图', await clickViewTab(session, '可用性') === true)
   const uptimeUp = await session.waitFor(`!!document.querySelector('.uptime-status-strip')`, 20000)
@@ -376,8 +415,9 @@ finally {
     })()`))
     check('卡片标签行单行（不换行 + 溢出裁切）', cardRowInfo.ok === true && cardRowInfo.nowrap === true && cardRowInfo.clip === true, JSON.stringify(cardRowInfo).slice(0, 140))
     const expIdx = cardRowInfo.ok ? cardRowInfo.texts.findIndex(x => x.includes('left')) : -1
+    const grpIdx = cardRowInfo.ok ? cardRowInfo.texts.findIndex(x => x.includes('东京')) : -1
     const remIdx = cardRowInfo.ok ? cardRowInfo.texts.findIndex(x => x.includes('CN2 GIA')) : -1
-    check('卡片到期时间在所有备注之前', expIdx !== -1 && remIdx !== -1 && expIdx < remIdx, `exp@${expIdx} rem@${remIdx} [${cardRowInfo.texts.join(' / ')}]`)
+    check('卡片到期时间在分组与备注之前', expIdx !== -1 && grpIdx !== -1 && remIdx !== -1 && expIdx < grpIdx && expIdx < remIdx, `exp@${expIdx} grp@${grpIdx} rem@${remIdx} [${cardRowInfo.texts.join(' / ')}]`)
     const privVisible = await priv.evaluate(`document.querySelectorAll('.node-card-commander [data-accent="cardchips"] [data-private-remark]').length`)
     let privInOverflow = false
     const hasPlus = await priv.evaluate(`(() => {

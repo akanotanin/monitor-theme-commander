@@ -14,7 +14,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAppConfig } from '@/hooks/useAppConfig';
 import { useIsMobile } from '@/hooks/useIsMobile';
 import { Sparkline } from './Sparkline';
-import { ArrowUpDown, ArrowUp, ArrowDown, Lock } from 'lucide-react';
+import { ArrowUpDown, ArrowUp, ArrowDown, Lock, Signal } from 'lucide-react';
 import { SystemIcon } from '@/lib/systemIcon';
 import type { NodeWithStatus } from '@/services/api';
 import { useRecentStats } from '@/hooks/useRecentStats';
@@ -26,6 +26,10 @@ import { TagPill } from './TagPill';
 import { OfflineNodeState, OfflineTableCell } from './OfflineNodeState';
 import { buildTagChips, splitPrivateRemarkTags, type TagColor } from '@/lib/parseTags';
 import { useChipsFit } from '@/hooks/useChipsFit';
+import { processPingRecords, interpolatePingNulls, type PingRecord, type TaskInfo } from '@/lib/chart-utils';
+import { PingLatencyLineChart } from './metric-charts/MetricCharts';
+import { apiService } from '@/services/api';
+import { HudSpinner } from './HudSpinner';
 import dayjs from 'dayjs';
 
 interface NodeTableProps {
@@ -191,9 +195,11 @@ function compactColumnClass(columnId: string) {
 interface DesktopRowProps {
   row: Row<NodeWithStatus>;
   isLast: boolean;
+  expanded: boolean;
+  onToggle: (uuid: string) => void;
 }
 
-const DesktopRow = memo(function DesktopRow({ row, isLast }: DesktopRowProps) {
+const DesktopRow = memo(function DesktopRow({ row, isLast, expanded, onToggle }: DesktopRowProps) {
   const isOnline = row.original.status === 'online';
   const stats = isOnline ? row.original.stats : undefined;
   const isCritical = !!stats && (
@@ -203,9 +209,12 @@ const DesktopRow = memo(function DesktopRow({ row, isLast }: DesktopRowProps) {
   );
 
   return (
+    <>
     <tr
+      onClick={() => onToggle(row.original.uuid)}
       className={cn(
-        'group transition-colors hover:bg-primary/8 relative',
+        'group transition-colors hover:bg-primary/8 relative cursor-pointer',
+        expanded && 'bg-primary/[0.05]',
         !isLast && 'border-b border-border/15',
         !isOnline && 'bg-destructive/[0.025]',
         isCritical && 'bg-destructive/10',
@@ -262,10 +271,19 @@ const DesktopRow = memo(function DesktopRow({ row, isLast }: DesktopRowProps) {
         );
       })}
     </tr>
+    {expanded && (
+      <tr className="table-expand-row">
+        <td colSpan={row.getVisibleCells().length} className="p-0">
+          <TableLatencyPanel node={row.original} />
+        </td>
+      </tr>
+    )}
+    </>
   );
 }, (prev, next) =>
   prev.row.original === next.row.original &&
   prev.isLast === next.isLast &&
+  prev.expanded === next.expanded &&
   prev.row.getVisibleCells().length === next.row.getVisibleCells().length,
 );
 
@@ -275,9 +293,11 @@ interface MobileRowProps {
   onOpen: (uuid: string) => void;
   t: (k: string, p?: Record<string, unknown>) => string;
   isLoggedIn: boolean;
+  expanded: boolean;
+  onToggle: (uuid: string) => void;
 }
 
-const MobileRow = memo(function MobileRow({ node, isLast, onOpen, t, isLoggedIn }: MobileRowProps) {
+const MobileRow = memo(function MobileRow({ node, isLast, onOpen, t, isLoggedIn, expanded, onToggle }: MobileRowProps) {
   const isOnline = node.status === 'online';
   const stats = isOnline ? node.stats : undefined;
   const cpuUsage = stats?.cpu?.usage ?? 0;
@@ -298,8 +318,10 @@ const MobileRow = memo(function MobileRow({ node, isLast, onOpen, t, isLoggedIn 
 
   return (
     <div
+      onClick={() => onToggle(node.uuid)}
       className={cn(
-        'px-3 py-3 space-y-3 transition-colors even:bg-foreground/[0.015] hover:bg-primary/6 relative',
+        'px-3 py-3 space-y-3 transition-colors even:bg-foreground/[0.015] hover:bg-primary/6 relative cursor-pointer',
+        expanded && 'bg-primary/[0.045]',
         !isLast && 'border-b border-border/20',
         !isOnline && 'opacity-45',
       )}
@@ -316,7 +338,7 @@ const MobileRow = memo(function MobileRow({ node, isLast, onOpen, t, isLoggedIn 
           <button
             type="button"
             className="node-name min-w-0 flex-1 text-base truncate cursor-pointer text-foreground hover:text-primary hover:underline underline-offset-4 decoration-primary/40 transition-colors text-left"
-            onClick={() => onOpen(node.uuid)}
+            onClick={(event) => { event.stopPropagation(); onOpen(node.uuid); }}
           >{node.name}</button>
         </div>
         {chips.length > 0 && (
@@ -375,8 +397,8 @@ function buildTableChips(
   hiddenLabel: string,
 ): TableChipItem[] {
   return [
-    ...(node.group ? [{ key: `grp-${node.group}`, label: node.group, kind: 'group' as const }] : []),
     ...(expiryStatus ? [{ key: `exp-${node.expired_at}`, label: formatExpiry(node.expired_at, node.expires_in), kind: 'expiry' as const }] : []),
+    ...(node.group ? [{ key: `grp-${node.group}`, label: node.group, kind: 'group' as const }] : []),
     ...chipItems.map((chip, i) => ({ key: `rem-${i}-${chip.label}`, label: chip.label, kind: 'remark' as const, color: chip.color })),
     ...privateChips.map((text, i) => ({ key: `prv-${i}-${text}`, label: text, kind: 'private' as const })),
     ...(node.hidden ? [{ key: 'hidden', label: hiddenLabel, kind: 'hidden' as const }] : []),
@@ -532,7 +554,7 @@ const NodeCell = memo(function NodeCell({ node, onOpen, t, isLoggedIn }: NodeCel
         <button
           type="button"
           className="node-name text-base truncate cursor-pointer text-foreground hover:text-primary hover:underline underline-offset-4 decoration-primary/40 transition-colors text-left"
-          onClick={() => onOpen(node.uuid)}
+          onClick={(event) => { event.stopPropagation(); onOpen(node.uuid); }}
         >
           {node.name}
         </button>
@@ -563,6 +585,102 @@ const NodeCell = memo(function NodeCell({ node, onOpen, t, isLoggedIn }: NodeCel
   );
 });
 
+/** 表格行展开的延迟图表面板（行点击展开；参照 jikasei 紧凑模式的就地展开） */
+function TableLatencyPanel({ node }: { node: NodeWithStatus }) {
+  const { t } = useTranslation();
+  const [hours, setHours] = useState(6);
+  const [pingData, setPingData] = useState<PingRecord[] | null>(null);
+  const [tasks, setTasks] = useState<TaskInfo[]>([]);
+  const [hiddenLines, setHiddenLines] = useState<Record<string, boolean>>({});
+
+  useEffect(() => {
+    let alive = true;
+    setPingData(null);
+    setTasks([]);
+    apiService
+      .getPingHistory(node.uuid, hours)
+      .then((history) => {
+        if (!alive) return;
+        setPingData((history?.records || []) as PingRecord[]);
+        setTasks((history?.tasks || []) as TaskInfo[]);
+      })
+      .catch(() => {
+        if (alive) setPingData([]);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [node.uuid, hours]);
+
+  const pingChartData = useMemo(() => {
+    const data = pingData || [];
+    if (!data.length) return [];
+    const taskKeys = tasks.map(item => String(item.id));
+    let processed = processPingRecords(data, tasks, hours);
+    processed = interpolatePingNulls(processed, taskKeys);
+    return processed;
+  }, [pingData, tasks, hours]);
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const handleLegendClick = useCallback((e: any) => {
+    if (e?.dataKey != null) {
+      const key = String(e.dataKey);
+      setHiddenLines(prev => ({ ...prev, [key]: !prev[key] }));
+    }
+  }, []);
+
+  return (
+    <div
+      data-accent="table-panel"
+      className="table-latency-panel animate-in fade-in-0 slide-in-from-top-1 duration-200 border-b border-border/25 bg-foreground/[0.02] px-3 pb-3 pt-2.5"
+    >
+      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+        <div className="flex items-center gap-1.5">
+          <Signal className="h-3.5 w-3.5 text-primary/70" aria-hidden />
+          <span className="type-hud-label">{t('chart.pingLatency')}</span>
+        </div>
+        <div className="scrollbar-none flex min-w-0 items-center gap-0.5 overflow-x-auto">
+          {[1, 6, 24, 168].map(h => (
+            <button
+              key={h}
+              type="button"
+              onClick={() => setHours(h)}
+              className={`cursor-pointer rounded h-7 min-w-9 sm:min-w-0 px-2 font-mono text-xs transition-colors ${
+                hours === h
+                  ? 'bg-primary text-primary-foreground'
+                  : 'text-muted-foreground hover:bg-muted/50'
+              }`}
+            >
+              {h <= 24 ? `${h}H` : `${h / 24}D`}
+            </button>
+          ))}
+        </div>
+      </div>
+      <div className="h-[220px] w-full">
+        {pingChartData.length ? (
+          <PingLatencyLineChart
+            pingChartData={pingChartData}
+            tasks={tasks}
+            mode="modal"
+            isMobile={false}
+            containerClassName="h-full w-full"
+            smooth={false}
+            hiddenLines={hiddenLines}
+            onLegendClick={handleLegendClick}
+          />
+        ) : (
+          <div className="flex h-full items-center justify-center">
+            {pingData === null
+              ? <HudSpinner size="md" />
+              : <span className="text-xs font-mono text-muted-foreground">{t('chart.noPingData')}</span>
+            }
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export function NodeTable({ nodes }: NodeTableProps) {
   const { t } = useTranslation();
   const [sorting, setSorting] = useState<SortingState>([]);
@@ -570,6 +688,10 @@ export function NodeTable({ nodes }: NodeTableProps) {
   const { isLoggedIn } = useAppConfig();
   const navigate = useNavigate();
   const openNode = useCallback((uuid: string) => navigate(`/node/${uuid}`), [navigate]);
+  const [expandedUuid, setExpandedUuid] = useState<string | null>(null);
+  const toggleExpanded = useCallback((uuid: string) => {
+    setExpandedUuid(prev => (prev === uuid ? null : uuid));
+  }, []);
   const bodyRef = useRef<HTMLDivElement>(null);
   const [scrollMargin, setScrollMargin] = useState(0);
   const isCompactLayout = useIsMobile(1024);
@@ -846,6 +968,8 @@ export function NodeTable({ nodes }: NodeTableProps) {
                       key={row.id}
                       row={row}
                       isLast={virtualRow.index === tableRows.length - 1}
+                      expanded={expandedUuid === row.original.uuid}
+                      onToggle={toggleExpanded}
                     />
                   );
                 })}
@@ -875,7 +999,10 @@ export function NodeTable({ nodes }: NodeTableProps) {
                     onOpen={openNode}
                     t={t}
                     isLoggedIn={isLoggedIn}
+                    expanded={expandedUuid === row.original.uuid}
+                    onToggle={toggleExpanded}
                   />
+                  {expandedUuid === row.original.uuid && <TableLatencyPanel node={row.original} />}
                 </div>
               );
             })}

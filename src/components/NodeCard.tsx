@@ -343,8 +343,8 @@ export const NodeCard = memo(function NodeCard({ node, onViewCharts }: NodeCardP
 
   const privateChips = isLoggedIn ? splitPrivateRemarkTags(node.remark) : [];
   const cardChips: CardChipItem[] = [
-    ...(node.group ? [{ key: `grp-${node.group}`, label: node.group, kind: 'group' as const }] : []),
     ...(expiryStatus ? [{ key: `exp-${node.expired_at}`, label: formatExpiry(node.expired_at, node.expires_in), kind: 'expiry' as const }] : []),
+    ...(node.group ? [{ key: `grp-${node.group}`, label: node.group, kind: 'group' as const }] : []),
     ...chipItems.map((chip, i) => ({ key: `rem-${i}-${chip.label}`, label: chip.label, kind: 'remark' as const, color: chip.color })),
     ...privateChips.map((text, i) => ({ key: `prv-${i}-${text}`, label: text, kind: 'private' as const })),
     ...(node.hidden ? [{ key: 'hidden', label: t('node.hidden'), kind: 'hidden' as const }] : []),
