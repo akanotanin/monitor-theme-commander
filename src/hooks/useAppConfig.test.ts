@@ -15,6 +15,7 @@ const samplePublicInfo = {
     globe_marker_style: 'lite',
     globe_mode: 'static',
     globe_respect_reduced_motion: false,
+    ping_lines: ' 电信\n联通 ',
   },
 };
 
@@ -24,6 +25,7 @@ describe('parseThemeConfigFromPublicSettings', () => {
     expect(tc.globe_mode).toBe('dynamic');
     expect(tc.globe_marker_style).toBe('rich');
     expect(tc.default_view).toBe('globe');
+    expect(tc.ping_lines).toBe('');
   });
 
   it('reads nested theme_settings object', () => {
@@ -39,6 +41,7 @@ describe('parseThemeConfigFromPublicSettings', () => {
     expect(tc.enable_privacy_mode).toBe(false);
     expect(tc.globe_respect_reduced_motion).toBe(false);
     expect(tc.custom_footer).toBe('Footer text');
+    expect(tc.ping_lines).toBe(' 电信\n联通 ');
   });
 
   it('parses theme_settings JSON string', () => {

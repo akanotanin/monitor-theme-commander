@@ -14,7 +14,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAppConfig } from '@/hooks/useAppConfig';
 import { useIsMobile } from '@/hooks/useIsMobile';
 import { Sparkline } from './Sparkline';
-import { ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
+import { ArrowUpDown, ArrowUp, ArrowDown, Lock } from 'lucide-react';
 import { SystemIcon } from '@/lib/systemIcon';
 import type { NodeWithStatus } from '@/services/api';
 import { useRecentStats } from '@/hooks/useRecentStats';
@@ -24,7 +24,7 @@ import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip';
 import { RegionFlag } from './RegionFlag';
 import { TagPill } from './TagPill';
 import { OfflineNodeState, OfflineTableCell } from './OfflineNodeState';
-import { buildTagChips } from '@/lib/parseTags';
+import { buildTagChips, splitPrivateRemarkTags } from '@/lib/parseTags';
 import dayjs from 'dayjs';
 
 interface NodeTableProps {
@@ -292,6 +292,11 @@ const MobileRow = memo(function MobileRow({ node, isLast, onOpen, t, isLoggedIn 
   const loadStatus = loadRatio >= 1.5 ? 'critical' : loadRatio >= 1 ? 'warning' : 'normal';
   const expiryStatus = getExpiryStatus(node.expired_at, node.expires_in);
   const chipItems = buildTagChips(node.tags, node.public_remark);
+  const privateChips = isLoggedIn ? splitPrivateRemarkTags(node.remark) : [];
+  const tagChips = [
+    ...chipItems.map(chip => ({ kind: 'public' as const, label: chip.label, color: chip.color, isRemark: !!chip.isRemark })),
+    ...privateChips.map(text => ({ kind: 'private' as const, label: text, color: null, isRemark: true })),
+  ];
 
   return (
     <div
@@ -316,37 +321,11 @@ const MobileRow = memo(function MobileRow({ node, isLast, onOpen, t, isLoggedIn 
             onClick={() => onOpen(node.uuid)}
           >{node.name}</button>
         </div>
-        {(node.group || chipItems.length > 0 || node.hidden || expiryStatus) && (
-          <div className="flex flex-wrap items-center gap-1 ml-0 sm:ml-4">
+        {(node.group || tagChips.length > 0 || node.hidden || expiryStatus) && (
+          <div data-accent="tablechips" className="flex flex-wrap items-center gap-1 ml-0 sm:ml-4">
             {node.group && (
               <span className="text-xxs font-mono text-primary/85 bg-primary/15 px-1.5 py-0.5 rounded-sm">
                 {node.group}
-              </span>
-            )}
-            {chipItems.slice(0, 5).map((chip, i) => (
-              <TagPill
-                key={i}
-                label={chip.label}
-                color={chip.color}
-                size="xs"
-                className={chip.isRemark ? 'inline-block max-w-full truncate' : undefined}
-              />
-            ))}
-            {chipItems.length > 5 && (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <span className="text-xxs font-mono text-muted-foreground/55 bg-muted/35 px-1.5 py-0.5 rounded-sm cursor-default">
-                    +{chipItems.length - 5}
-                  </span>
-                </TooltipTrigger>
-                <TooltipContent side="bottom" className="text-xs font-mono">
-                  {chipItems.slice(5).map(t => t.label).join(', ')}
-                </TooltipContent>
-              </Tooltip>
-            )}
-            {node.hidden && (
-              <span className="text-xxs font-mono text-warning/85 bg-warning/15 px-1.5 py-0.5 rounded-sm">
-                {t('node.hidden')}
               </span>
             )}
             {expiryStatus && (
@@ -377,6 +356,55 @@ const MobileRow = memo(function MobileRow({ node, isLast, onOpen, t, isLoggedIn 
                   }
                 </TooltipContent>
               </Tooltip>
+            )}
+            {tagChips.slice(0, 5).map((chip, i) =>
+              chip.kind === 'private' ? (
+                <span
+                  key={`p-${i}`}
+                  data-private-remark
+                  title={t('label.privateRemarkTip', { text: chip.label })}
+                  className="inline-flex items-center gap-1 text-xxs font-mono text-muted-foreground border border-border/60 px-1.5 py-0.5 rounded-sm"
+                >
+                  <Lock className="h-2.5 w-2.5 shrink-0" aria-hidden />
+                  <span className="max-w-[9rem] truncate">{chip.label}</span>
+                </span>
+              ) : (
+                <TagPill
+                  key={`t-${i}`}
+                  label={chip.label}
+                  color={chip.color}
+                  size="xs"
+                  className={chip.isRemark ? 'inline-block max-w-full truncate' : undefined}
+                />
+              ),
+            )}
+            {tagChips.length > 5 && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span className="text-xxs font-mono text-muted-foreground/55 bg-muted/35 px-1.5 py-0.5 rounded-sm cursor-default">
+                    +{tagChips.length - 5}
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" className="bg-popover text-popover-foreground border border-border/60 max-w-xs p-2 [&>svg]:bg-popover [&>svg]:fill-popover">
+                  <div className="flex flex-col items-start gap-1">
+                    {tagChips.slice(5).map((chip, i) =>
+                      chip.kind === 'private' ? (
+                        <span key={`po-${i}`} data-private-remark className="inline-flex items-center gap-1 text-xxs font-mono text-muted-foreground border border-border/60 px-1.5 py-0.5 rounded-sm max-w-full">
+                          <Lock className="h-2.5 w-2.5 shrink-0" aria-hidden />
+                          <span className="break-words">{chip.label}</span>
+                        </span>
+                      ) : (
+                        <TagPill key={`to-${i}`} label={chip.label} color={chip.color} size="xs" className="inline-block max-w-full break-words" />
+                      ),
+                    )}
+                  </div>
+                </TooltipContent>
+              </Tooltip>
+            )}
+            {node.hidden && (
+              <span className="text-xxs font-mono text-warning/85 bg-warning/15 px-1.5 py-0.5 rounded-sm">
+                {t('node.hidden')}
+              </span>
             )}
           </div>
         )}
@@ -494,6 +522,11 @@ export function NodeTable({ nodes }: NodeTableProps) {
         const node = row.original;
         const expiryStatus = getExpiryStatus(node.expired_at, node.expires_in);
         const chipItems = buildTagChips(node.tags, node.public_remark);
+        const privateChips = isLoggedIn ? splitPrivateRemarkTags(node.remark) : [];
+        const tagChips = [
+          ...chipItems.map(chip => ({ kind: 'public' as const, label: chip.label, color: chip.color, isRemark: !!chip.isRemark })),
+          ...privateChips.map(text => ({ kind: 'private' as const, label: text, color: null, isRemark: true })),
+        ];
         const platformLine = [
           node.os,
           [node.virtualization, node.arch].filter(Boolean).join('/'),
@@ -514,37 +547,11 @@ export function NodeTable({ nodes }: NodeTableProps) {
             </div>
 
             {/* Row 2: group + tags + hidden + expiry */}
-            {(node.group || chipItems.length > 0 || node.hidden || expiryStatus) && (
-              <div className="flex flex-wrap items-center gap-1">
+            {(node.group || tagChips.length > 0 || node.hidden || expiryStatus) && (
+              <div data-accent="tablechips" className="flex flex-wrap items-center gap-1">
                 {node.group && (
                   <span className="text-xxs font-mono text-primary/85 bg-primary/15 px-1.5 py-0.5 rounded-sm shrink-0">
                     {node.group}
-                  </span>
-                )}
-                {chipItems.slice(0, 3).map((chip, i) => (
-                  <TagPill
-                    key={i}
-                    label={chip.label}
-                    color={chip.color}
-                    size="xs"
-                    className={chip.isRemark ? 'inline-block max-w-full truncate' : undefined}
-                  />
-                ))}
-                {chipItems.length > 3 && (
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <span className="text-xxs font-mono text-muted-foreground/55 bg-muted/35 px-1.5 py-0.5 rounded-sm cursor-default shrink-0">
-                        +{chipItems.length - 3}
-                      </span>
-                    </TooltipTrigger>
-                    <TooltipContent side="bottom" className="text-xs font-mono">
-                      {chipItems.slice(3).map(t => t.label).join(', ')}
-                    </TooltipContent>
-                  </Tooltip>
-                )}
-                {node.hidden && (
-                  <span className="text-xxs font-mono text-warning/85 bg-warning/15 px-1.5 py-0.5 rounded-sm shrink-0">
-                    {t('node.hidden')}
                   </span>
                 )}
                 {expiryStatus && (
@@ -577,6 +584,55 @@ export function NodeTable({ nodes }: NodeTableProps) {
                       }
                     </TooltipContent>
                   </Tooltip>
+                )}
+                {tagChips.slice(0, 3).map((chip, i) =>
+                  chip.kind === 'private' ? (
+                    <span
+                      key={`p-${i}`}
+                      data-private-remark
+                      title={t('label.privateRemarkTip', { text: chip.label })}
+                      className="inline-flex items-center gap-1 text-xxs font-mono text-muted-foreground border border-border/60 px-1.5 py-0.5 rounded-sm shrink-0"
+                    >
+                      <Lock className="h-2.5 w-2.5 shrink-0" aria-hidden />
+                      <span className="max-w-[9rem] truncate">{chip.label}</span>
+                    </span>
+                  ) : (
+                    <TagPill
+                      key={`t-${i}`}
+                      label={chip.label}
+                      color={chip.color}
+                      size="xs"
+                      className={chip.isRemark ? 'inline-block max-w-full truncate' : undefined}
+                    />
+                  ),
+                )}
+                {tagChips.length > 3 && (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <span className="text-xxs font-mono text-muted-foreground/55 bg-muted/35 px-1.5 py-0.5 rounded-sm cursor-default shrink-0">
+                        +{tagChips.length - 3}
+                      </span>
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom" className="bg-popover text-popover-foreground border border-border/60 max-w-xs p-2 [&>svg]:bg-popover [&>svg]:fill-popover">
+                      <div className="flex flex-col items-start gap-1">
+                        {tagChips.slice(3).map((chip, i) =>
+                          chip.kind === 'private' ? (
+                            <span key={`po-${i}`} data-private-remark className="inline-flex items-center gap-1 text-xxs font-mono text-muted-foreground border border-border/60 px-1.5 py-0.5 rounded-sm max-w-full">
+                              <Lock className="h-2.5 w-2.5 shrink-0" aria-hidden />
+                              <span className="break-words">{chip.label}</span>
+                            </span>
+                          ) : (
+                            <TagPill key={`to-${i}`} label={chip.label} color={chip.color} size="xs" className="inline-block max-w-full break-words" />
+                          ),
+                        )}
+                      </div>
+                    </TooltipContent>
+                  </Tooltip>
+                )}
+                {node.hidden && (
+                  <span className="text-xxs font-mono text-warning/85 bg-warning/15 px-1.5 py-0.5 rounded-sm shrink-0">
+                    {t('node.hidden')}
+                  </span>
                 )}
               </div>
             )}

@@ -16,6 +16,7 @@ interface NodeListProps {
   loading?: boolean;
   onRefresh?: () => void;
   defaultView?: 'grid' | 'table';
+  onViewCharts?: (uuid: string, name: string) => void;
 }
 
 function FilterDropdown({
@@ -102,7 +103,7 @@ function FilterDropdown({
 /* ══════════════════════════════════════════════════════════════
    VirtualGrid — virtualized grid using @tanstack/react-virtual
    ══════════════════════════════════════════════════════════════ */
-function VirtualGrid({ nodes }: { nodes: NodeWithStatus[] }) {
+function VirtualGrid({ nodes, onViewCharts }: { nodes: NodeWithStatus[]; onViewCharts?: (uuid: string, name: string) => void }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [cols, setCols] = useState(3);
   const [scrollMargin, setScrollMargin] = useState(0);
@@ -158,7 +159,7 @@ function VirtualGrid({ nodes }: { nodes: NodeWithStatus[] }) {
                 style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}
               >
                 {rowNodes.map(node => (
-                  <NodeCard key={node.uuid} node={node} />
+                  <NodeCard key={node.uuid} node={node} onViewCharts={onViewCharts} />
                 ))}
               </div>
             </div>
@@ -169,7 +170,7 @@ function VirtualGrid({ nodes }: { nodes: NodeWithStatus[] }) {
   );
 }
 
-export function NodeList({ nodes = [], loading = false, onRefresh, defaultView = 'grid' }: NodeListProps) {
+export function NodeList({ nodes = [], loading = false, onRefresh, defaultView = 'grid', onViewCharts }: NodeListProps) {
   const { t } = useTranslation();
   const { isLoggedIn, themeConfig } = useAppConfig();
   const showAssetStats = themeConfig.enable_asset_stats && isLoggedIn;
@@ -490,7 +491,7 @@ export function NodeList({ nodes = [], loading = false, onRefresh, defaultView =
           </div>
         </div>
       ) : defaultView === 'grid' ? (
-        <VirtualGrid nodes={sortedNodes} />
+        <VirtualGrid nodes={sortedNodes} onViewCharts={onViewCharts} />
       ) : (
         <NodeTable nodes={sortedNodes} />
       )}

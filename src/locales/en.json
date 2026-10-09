@@ -147,6 +147,8 @@
     "traffic": "TRAFFIC",
     "ping": "PING",
     "noPingData": "NO PING DATA",
+    "packetLoss": "PACKET LOSS",
+    "openCharts": "OPEN CHARTS",
     "noData": "NO DATA",
     "noHistory": "NO HISTORICAL DATA",
     "nodeMonitor": "NODE MONITOR",

@@ -35,7 +35,7 @@ interface ChartModalProps {
 
 type ChartType = 'load' | 'cpu' | 'ram' | 'disk' | 'network' | 'connections' | 'traffic' | 'ping';
 
-const chartTabIds: ChartType[] = ['load', 'cpu', 'ram', 'disk', 'network', 'connections', 'traffic', 'ping'];
+const chartTabIds: ChartType[] = ['ping', 'cpu', 'ram', 'disk', 'network', 'connections', 'traffic', 'load'];
 
 const chartTabKeys: Record<ChartType, string> = {
   load: 'chart.load',
@@ -57,7 +57,7 @@ export function ChartModal({ nodeUuid, nodeName, onClose }: ChartModalProps) {
   const [pingData, setPingData] = useState<PingRecord[] | null>(null);
   const [tasks, setTasks] = useState<TaskInfo[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeChart, setActiveChart] = useState<ChartType>('load');
+  const [activeChart, setActiveChart] = useState<ChartType>('ping');
   const [timeRange, setTimeRange] = useState(6);
   const [hiddenLines, setHiddenLines] = useState<Record<string, boolean>>({});
   const [smooth, setSmooth] = useState(false);

@@ -539,6 +539,9 @@ export function NetworkTrafficLineChart({
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type LegendHandler = (e: any) => void;
 
+/** 丢包标记颜色（红点 + 提示行前缀），深浅主题下都醒目 */
+const LOSS_MARKER_COLOR = '#ef4444';
+
 export function PingLatencyLineChart({
   pingChartData,
   tasks,
@@ -561,6 +564,7 @@ export function PingLatencyLineChart({
   emptyContent?: ReactNode;
 }) {
   const { t } = useTranslation();
+  const lossLabel = t('chart.packetLoss');
   const { margin, xAxisProps, yAxisConfig } = useMetricChartAxes(mode, pingChartData.length, isMobile);
 
   const pingConfig: Record<string, { label: string; color: string }> = {};
@@ -601,8 +605,12 @@ export function PingLatencyLineChart({
         <YAxis {...yPing} />
         <ChartTooltip
           cursor={false}
-          formatter={(v: number | string) => `${Math.round(Number(v))} ms`}
-          content={<ChartTooltipContent labelFormatter={labelFormatter} indicator="dot" />}
+          content={<ChartTooltipContent
+            labelFormatter={labelFormatter}
+            indicator="dot"
+            payloadFilter={entry => !String(entry.dataKey ?? '').startsWith('loss_') || entry.value != null}
+            formatter={(value, name) => (String(name ?? '').endsWith(lossLabel) ? '' : `${Math.round(Number(value))} ms`)}
+          />}
         />
         <ChartLegend
           content={<ChartLegendContent inactiveDataKeys={hiddenLines} />}
@@ -619,6 +627,21 @@ export function PingLatencyLineChart({
             strokeWidth={2}
             connectNulls={false}
             type={smooth ? 'basis' : 'linear'}
+            hide={!!hiddenLines[String(task.id)]}
+          />
+        ))}
+        {tasks.map(task => (
+          <Line
+            key={`loss-${task.id}`}
+            dataKey={`loss_${task.id}`}
+            name={`${task.name} ${lossLabel}`}
+            stroke={LOSS_MARKER_COLOR}
+            strokeWidth={0}
+            dot={{ r: 2.5, fill: LOSS_MARKER_COLOR, strokeWidth: 0 }}
+            activeDot={false}
+            isAnimationActive={false}
+            connectNulls={false}
+            legendType="none"
             hide={!!hiddenLines[String(task.id)]}
           />
         ))}

@@ -260,6 +260,19 @@ function adaptPingStats(ping?: Record<string, RPC2PingStat>): Record<string, Pin
   return out;
 }
 
+/** Latest latency of the ping task whose name matches (trimmed), or null when unavailable */
+export function getPingLatencyByName(ping: Record<string, PingStat> | undefined, name: string | null | undefined): number | null {
+  if (!ping) return null;
+  const wanted = (name || '').trim();
+  if (!wanted) return null;
+  for (const stat of Object.values(ping)) {
+    if ((stat.name || '').trim() === wanted && stat.latest >= 0) {
+      return stat.latest;
+    }
+  }
+  return null;
+}
+
 /** Best non-loss latest latency across embedded ping tasks, or null when unavailable */
 export function getBestPingLatency(ping?: Record<string, PingStat>): number | null {
   if (!ping) return null;

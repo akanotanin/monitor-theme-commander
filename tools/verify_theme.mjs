@@ -13,7 +13,11 @@
 //   ⑦ 点开节点详情页能渲染硬件面板与图表（无历史序列显示「无历史数据」）
 //   ⑧ 390 宽无横向溢出、控制台无错误
 //   ⑨ 图表弹窗：网络页签画出速率曲线；负载/连接页签显示「无历史数据」
-//   ⑩ 私有备注（打桩登录态）渲染为带锁小卡片
+//   ⑩ 私有备注（打桩登录态）渲染为带锁小卡片；表格备注行按惯例（到期前置 + 私有芯片 + 芯片浮层）
+//   ⑫ 图表弹窗页签顺序（ping 第一位、负载最后）与默认页签
+//   ⑬ 卡片右上角打开图表按钮
+//   ⑭ 表格标签行（tablechips）与到期前置
+//   ⑮ Ping 延迟线路设置（打桩）与丢包红点（打桩）
 import { mkdirSync } from 'node:fs'
 import process from 'node:process'
 import { setTimeout as sleep } from 'node:timers/promises'
@@ -129,6 +133,20 @@ try {
   })()`)
   const modalUp = await session.waitFor(`!!document.querySelector('.chart-card-commander')`, 20000)
   check('侧栏详情能打开图表弹窗', chartsBtn === true && modalUp === true)
+  const tabOrder = JSON.parse(await session.evaluate(`(() => {
+    const known = ['Ping', 'CPU', '内存', '磁盘', '网络', '连接', '流量', '负载']
+    const tabs = [...document.querySelectorAll('.chart-card-commander button')]
+      .map(b => (b.innerText || '').trim())
+      .filter(x => known.includes(x))
+    return JSON.stringify({ tabs })
+  })()`))
+  check('弹窗页签 ping 在第一位', tabOrder.tabs[0] === 'Ping', tabOrder.tabs.join(' / '))
+  check('弹窗页签 负载 在最后一位', tabOrder.tabs[tabOrder.tabs.length - 1] === '负载', tabOrder.tabs.join(' / '))
+  const pingTabDrawn = await session.waitFor(
+    `[...document.querySelectorAll('.chart-card-commander .recharts-surface path')].some(p => (p.getAttribute('d') || '').length > 100)`,
+    45000,
+  )
+  check('弹窗默认页签（Ping 延迟）画出曲线', pingTabDrawn === true)
   const clickModalTab = label => session.evaluate(`(() => {
     const b = [...document.querySelectorAll('.chart-card-commander button')].find(x => x.innerText.trim() === ${JSON.stringify(label)})
     if (!b) return false
@@ -165,6 +183,15 @@ try {
     30000,
   )
   check('卡片视图渲染出节点卡片', rendered)
+
+  // 卡片右上角：打开图表按钮 → 弹窗
+  const cardChartBtn = await session.evaluate(`!!document.querySelector('.node-card-commander [data-accent="cardcharts"]')`)
+  check('卡片右上角有打开图表按钮', cardChartBtn === true)
+  await clickSelector(session, '.node-card-commander [data-accent="cardcharts"]')
+  const modalFromCard = await session.waitFor(`!!document.querySelector('.chart-card-commander')`, 20000)
+  check('卡片按钮能打开图表弹窗', modalFromCard === true)
+  await session.evaluate(`(() => { const b = document.querySelector('.chart-card-commander button[aria-label="关闭"]'); if (b) { b.click(); return true } return false })()`)
+  await session.waitFor(`!document.querySelector('.chart-card-commander')`, 10000)
 
   // ⑤ 延迟数据是后台预热的，等它上卡（最多 20 秒）
   const latency = await session.waitFor(`document.body.innerText.includes('ms')`, 20000)
@@ -264,6 +291,16 @@ try {
   check('表格视图渲染出 table', tableUp === true)
   const tableChips = await session.evaluate(`document.querySelectorAll('.tag-pill-neutral').length`)
   check('表格视图有备注标签', tableChips >= 1, `实际 ${tableChips}`)
+  const tableRowInfo = JSON.parse(await session.evaluate(`(() => {
+    const rows = [...document.querySelectorAll('table [data-accent="tablechips"]')]
+    const row = rows.find(r => (r.innerText || '').includes('CN2 GIA'))
+    if (!row) return JSON.stringify({ ok: false, rows: rows.length })
+    return JSON.stringify({ ok: true, text: (row.innerText || '').replace(/\\s+/g, ' ') })
+  })()`))
+  check('表格行渲染标签行（tablechips）', tableRowInfo.ok === true, `rows=${tableRowInfo.rows ?? '-'} "${(tableRowInfo.text || '').slice(0, 80)}"`)
+  const tExp = tableRowInfo.ok ? tableRowInfo.text.indexOf('left') : -1
+  const tRem = tableRowInfo.ok ? tableRowInfo.text.indexOf('CN2 GIA') : -1
+  check('表格到期时间在备注之前', tExp !== -1 && tRem !== -1 && tExp < tRem, `exp@${tExp} rem@${tRem}`)
 
   check('能点击「可用性」视图', await clickViewTab(session, '可用性') === true)
   const uptimeUp = await session.waitFor(`!!document.querySelector('.uptime-status-strip')`, 20000)
@@ -357,6 +394,33 @@ finally {
       check('卡片 +N 悬浮层用芯片形态展示备注', tipInfo.ok === true && tipInfo.chips >= 1, `chips=${tipInfo.chips} "${tipInfo.text}"`)
     }
     check('卡片显示私有备注（可见或折进 +N 浮层）', privVisible > 0 || privInOverflow === true, `visible=${privVisible} overflow=${privInOverflow}`)
+
+    // 表格视图：私有备注同样按惯例（芯片 / 悬浮层芯片）
+    await priv.evaluate(`(() => { const b = [...document.querySelectorAll('button')].find(x => x.innerText.trim() === '表格'); if (b) b.click(); return !!b })()`)
+    await priv.waitFor(`!!document.querySelector('table [data-accent="tablechips"]')`, 25000)
+    const tRow = JSON.parse(await priv.evaluate(`(() => {
+      const rows = [...document.querySelectorAll('table [data-accent="tablechips"]')]
+      const row = rows.find(r => (r.innerText || '').includes('CN2 GIA')) || rows[0]
+      if (!row) return JSON.stringify({ ok: false })
+      const visible = row.querySelectorAll('[data-private-remark]').length
+      const plus = [...row.children].find(e => (e.innerText || '').startsWith('+'))
+      let plusBox = null
+      if (plus) { const r = plus.getBoundingClientRect(); plusBox = { x: r.x + r.width / 2, y: r.y + r.height / 2 } }
+      return JSON.stringify({ ok: true, visible, plusBox, text: (row.innerText || '').replace(/\\s+/g, ' ').slice(0, 90) })
+    })()`))
+    check('表格行备注行存在（打桩）', tRow.ok === true, `"${(tRow.text || '').slice(0, 80)}"`)
+    if (tRow.plusBox) {
+      await priv.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: tRow.plusBox.x, y: tRow.plusBox.y })
+      await priv.waitFor(`document.body.innerText.includes('仅管理员可见的测试备注')`, 8000)
+      const tipPriv = await priv.evaluate(`document.querySelectorAll('[data-slot="tooltip-content"] [data-private-remark]').length`)
+      check('表格 +N 悬浮层以芯片展示私有备注', tipPriv >= 1, `tip=${tipPriv}`)
+    }
+    else {
+      check('表格 +N 悬浮层以芯片展示私有备注', tRow.visible > 0, `visible=${tRow.visible}`)
+    }
+    // 切回卡片视图，继续原流程
+    await priv.evaluate(`(() => { const b = [...document.querySelectorAll('button')].find(x => x.innerText.trim() === '卡片'); if (b) b.click(); return !!b })()`)
+    await priv.waitFor(`document.querySelectorAll('.node-card-commander').length > 0`, 20000)
     await clickSelector(priv, '.node-card-commander .node-name')
     await priv.waitFor(`!!document.querySelector('.node-info-panel')`, 20000)
     const privInfo = JSON.parse(await priv.evaluate(`(() => {
@@ -375,6 +439,61 @@ finally {
   }
   finally {
     priv.close()
+  }
+}
+
+// ⑮ Ping 延迟线路设置 + 丢包红点（打桩：主题配置指定线路 + ping 历史改写）
+{
+  const ps = await openSession({ width: 1440, height: 1000 })
+  try {
+    await ps.addInitScript(`(() => {
+      const origFetch = window.fetch.bind(window)
+      window.fetch = async (input, init) => {
+        const url = typeof input === 'string' ? input : (input && input.url) || ''
+        if (url.includes('/themes/commander/config')) {
+          return new Response(JSON.stringify({ ping_lines: '美西 · 一毫秒' }), { status: 200, headers: { 'content-type': 'application/json' } })
+        }
+        const res = await origFetch(input, init)
+        if (url.includes('series=ping')) {
+          const data = await res.clone().json().catch(() => null)
+          if (data && Array.isArray(data.ping)) {
+            let k = 0
+            data.ping = data.ping.map((p) => {
+              if (p.task_id === 6) return { ...p, latency: 130 }
+              if (p.task_id === 5) { k += 1; if (k % 9 === 0) return { ...p, latency: -1 } }
+              return p
+            })
+          }
+          return new Response(JSON.stringify(data), { status: 200, headers: { 'content-type': 'application/json' } })
+        }
+        return res
+      }
+      class SilentWS { close() {} addEventListener() {} removeEventListener() {} send() {} }
+      window.WebSocket = SilentWS
+    })()`)
+    await ps.goto(`${BASE}/`)
+    await ps.evaluate(`localStorage.setItem('komari-language','zh-Hans')`)
+    await ps.goto(`${BASE}/`)
+    await ps.waitFor(`document.querySelectorAll('.sidebar-node-item').length > 0`, 60000)
+    await clickSelector(ps, '.sidebar-node-item')
+    await ps.waitFor(`!!document.querySelector('.sidebar-detail-telemetry')`, 30000)
+    const pinOk = await ps.waitFor(`(() => {
+      const sec = document.querySelector('.sidebar-detail-telemetry [data-accent="ping"]')
+      return !!sec && (sec.innerText || '').includes('130')
+    })()`, 45000)
+    const pinText = await ps.evaluate(`(() => { const sec = document.querySelector('.sidebar-detail-telemetry [data-accent="ping"]'); return sec ? (sec.innerText || '').replace(/\\s+/g, ' ').slice(0, 50) : '' })()`)
+    check('「Ping 延迟线路」设置生效（数值跟随指定线路）', pinOk === true, pinText)
+
+    // 丢包红点：打开图表弹窗（默认页签 = Ping 延迟）
+    await ps.evaluate(`(() => { const b = [...document.querySelectorAll('button')].find(x => x.innerText.trim() === '图表'); if (b) b.click(); return !!b })()`)
+    await ps.waitFor(`!!document.querySelector('.chart-card-commander')`, 20000)
+    const lossDots = await ps.waitFor(`document.querySelectorAll('.chart-card-commander circle[fill="#ef4444"]').length >= 1`, 45000)
+    check('Ping 图表画出丢包红点（打桩数据）', lossDots === true)
+    await ps.screenshot('shots/modal-ping-loss.png')
+    console.log('  已截图 shots/modal-ping-loss.png')
+  }
+  finally {
+    ps.close()
   }
 }
 

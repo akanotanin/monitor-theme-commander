@@ -78,8 +78,15 @@
       "type": "boolean",
       "key": "enable_asset_stats",
       "label": "启用计费汇总",
-      "default": false,
+      "default": true,
       "help": "网格 / 表格视图显示「计费汇总」按钮（仅登录用户可见），按币种汇总费用与剩余价值。"
+    },
+    {
+      "type": "string",
+      "key": "ping_lines",
+      "label": "Ping 延迟线路",
+      "default": "",
+      "help": "侧栏延迟区块展示的线路：填 ping 任务名（一行一个，取第一个匹配的）；留空自动选平均延迟最低的线路。"
     },
     {
       "type": "title",

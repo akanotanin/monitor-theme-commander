@@ -3,7 +3,7 @@ import { useMemo, memo } from 'react';
 import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
-import { AlertTriangle, ArrowUp, ArrowDown, Activity, Clock, Network, Signal, Lock } from 'lucide-react';
+import { AlertTriangle, ArrowUp, ArrowDown, Activity, Clock, Network, Signal, Lock, BarChart3 } from 'lucide-react';
 import { SystemIcon } from '@/lib/systemIcon';
 import type { NodeWithStatus } from '@/services/api';
 import { getBestPingLatency } from '@/services/api';
@@ -29,6 +29,7 @@ type CardChipItem = {
 
 interface NodeCardProps {
   node: NodeWithStatus;
+  onViewCharts?: (uuid: string, name: string) => void;
 }
 
 type GaugeChannel = 'cpu' | 'ram' | 'disk' | 'traffic';
@@ -310,7 +311,7 @@ function MobileNetworkTile({
   );
 }
 
-export const NodeCard = memo(function NodeCard({ node }: NodeCardProps) {
+export const NodeCard = memo(function NodeCard({ node, onViewCharts }: NodeCardProps) {
   const { t } = useTranslation();
   const isOnline = node.status === 'online';
   const stats = isOnline ? node.stats : undefined;
@@ -453,11 +454,23 @@ export const NodeCard = memo(function NodeCard({ node }: NodeCardProps) {
               onClick={() => navigate(`/node/${node.uuid}`)}
             >{node.name}</h3>
 
-            {(cpuStatus === 'critical' || ramStatus === 'critical') && (
-              <div className="flex items-center gap-1 text-xs font-mono text-destructive font-bold motion-safe:animate-pulse ml-auto">
-                <AlertTriangle className="h-3 w-3" />
-              </div>
-            )}
+            <div className="ml-auto flex shrink-0 items-center gap-1">
+              {(cpuStatus === 'critical' || ramStatus === 'critical') && (
+                <div className="flex items-center gap-1 text-xs font-mono text-destructive font-bold motion-safe:animate-pulse">
+                  <AlertTriangle className="h-3 w-3" />
+                </div>
+              )}
+              <button
+                type="button"
+                data-accent="cardcharts"
+                aria-label={t('chart.openCharts')}
+                title={t('chart.openCharts')}
+                className="flex h-6 w-6 items-center justify-center rounded text-muted-foreground/60 transition-colors hover:bg-primary/10 hover:text-primary"
+                onClick={() => onViewCharts?.(node.uuid, node.name)}
+              >
+                <BarChart3 className="h-3.5 w-3.5" />
+              </button>
+            </div>
           </div>
           {/* Tags row: 分组 + 到期 + 备注（公开/私有）— 单行，放不下的折进 +N 悬浮层 */}
           {cardChips.length > 0 && (

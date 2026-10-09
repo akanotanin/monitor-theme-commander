@@ -147,6 +147,8 @@
     "traffic": "流量",
     "ping": "Ping",
     "noPingData": "无 Ping 数据",
+    "packetLoss": "丢包",
+    "openCharts": "打开图表",
     "noData": "无数据",
     "noHistory": "无历史数据",
     "nodeMonitor": "节点监控",

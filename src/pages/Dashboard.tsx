@@ -1,6 +1,5 @@
 import { Suspense, useState, useCallback } from 'react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
-import { useNavigate } from 'react-router-dom';
 import { ViewLoadingFallback } from '@/components/ViewLoadingFallback';
 import { useNodesContext } from '@/contexts/NodesContext';
 import { useViewMode } from '@/contexts/ViewModeContext';
@@ -10,16 +9,11 @@ export function Dashboard() {
   const { viewMode } = useViewMode();
   const reduceMotion = useReducedMotion();
   const [chartModal, setChartModal] = useState<{ uuid: string; name: string } | null>(null);
-  const navigate = useNavigate();
   const { nodes, loading, refreshNodes, hubNodeUuid } = useNodesContext();
 
   const handleViewCharts = useCallback((uuid: string, name: string) => {
-    if (viewMode === 'globe') {
-      setChartModal({ uuid, name });
-    } else {
-      navigate(`/node/${uuid}`);
-    }
-  }, [viewMode, navigate]);
+    setChartModal({ uuid, name });
+  }, []);
 
   const viewTransition = reduceMotion ? { duration: 0 } : { duration: 0.2, ease: [0.25, 1, 0.5, 1] as const };
 
@@ -58,6 +52,7 @@ export function Dashboard() {
                 loading={loading}
                 onRefresh={refreshNodes}
                 defaultView={viewMode === 'grid' ? 'grid' : 'table'}
+                onViewCharts={handleViewCharts}
               />
             )}
           </motion.div>

@@ -105,6 +105,7 @@ const ChartTooltip = RechartsPrimitive.Tooltip
 function ChartTooltipContent({
   active,
   payload,
+  payloadFilter,
   className,
   indicator = "dot",
   hideLabel = false,
@@ -123,6 +124,8 @@ function ChartTooltipContent({
     indicator?: "line" | "dot" | "dashed"
     nameKey?: string
     labelKey?: string
+    /** 按需过滤 payload 条目（例如隐藏丢包标记行） */
+    payloadFilter?: (entry: { dataKey?: string | number; value?: unknown }) => boolean
   }) {
   const { config } = useChart()
 
@@ -177,7 +180,7 @@ function ChartTooltipContent({
     >
       {!nestLabel ? tooltipLabel : null}
       <div className="grid gap-1.5">
-        {payload.map((item, index) => {
+        {payload.filter(entry => !payloadFilter || payloadFilter(entry)).map((item, index) => {
           const key = `${nameKey || item.name || item.dataKey || "value"}`
           const itemConfig = getPayloadConfigFromPayload(config, item, key)
           const indicatorColor = color || item.payload.fill || item.color

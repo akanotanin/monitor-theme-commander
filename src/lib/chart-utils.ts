@@ -181,6 +181,8 @@ export function processPingRecords(
       if (anchor === null) anchors.push(use);
     }
     grouped[use][rec.task_id] = rec.value < 0 ? null : rec.value;
+    // 丢包样本单独记一条 loss_<taskId> 标记（0 = 丢包，其余为 null），供图表画红点
+    grouped[use][`loss_${rec.task_id}`] = rec.value < 0 ? 0 : null;
   }
 
   const merged = Object.values(grouped).sort(
@@ -253,10 +255,20 @@ export function interpolatePingNulls(
  * loss arrives as negative values and is treated as a gap, interpolated by the
  * same rules as the ping charts.
  */
+export function pickPingLine(raw: string | null | undefined): string | null {
+  if (!raw) return null;
+  for (const line of raw.split('\n')) {
+    const name = line.trim();
+    if (name) return name;
+  }
+  return null;
+}
+
 export function buildPingSparkline(
   records: PingRecord[],
   tasks: TaskInfo[],
   hours: number,
+  preferredTaskName?: string | null,
 ): { values: number[]; latest: number | null } | null {
   if (!records.length) return null;
   const rows = processPingRecords(records, tasks, hours);
@@ -272,8 +284,15 @@ export function buildPingSparkline(
       ? task.avg
       : Number.POSITIVE_INFINITY;
   };
-  keys.sort((a, b) => avgOf(a) - avgOf(b));
-  const best = keys[0];
+  const wanted = preferredTaskName?.trim();
+  let best: string | undefined = wanted
+    ? keys.find(k => tasks.some(item => String(item.id) === k && (item.name || '').trim() === wanted))
+    : undefined;
+  if (!best) {
+    keys.sort((a, b) => avgOf(a) - avgOf(b));
+    best = keys[0];
+  }
+  if (!best) return null;
 
   const values: number[] = [];
   for (const row of interpolatePingNulls(rows, [best])) {

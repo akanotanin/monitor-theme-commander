@@ -18,10 +18,11 @@ import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip
 import { TagPill } from './TagPill';
 import { OfflineNodeState } from './OfflineNodeState';
 import { buildTagChips, parseTagList, splitPrivateRemarkTags, type TagColor } from '@/lib/parseTags';
+import { pickPingLine } from '@/lib/chart-utils';
 import { Sparkline } from './Sparkline';
 import { useNodePingHistory } from '@/hooks/useNodePingHistory';
 import { useChipsFit } from '@/hooks/useChipsFit';
-import { getBestPingLatency } from '@/services/api';
+import { getBestPingLatency, getPingLatencyByName } from '@/services/api';
 interface SidebarProps {
   nodes: NodeWithStatus[];
   loading?: boolean;
@@ -640,9 +641,11 @@ function NodeDetailView({
   const { t } = useTranslation();
   const isOnline = node.status === 'online';
   const stats = isOnline ? node.stats : undefined;
-  const { isLoggedIn } = useAppConfig();
+  const { isLoggedIn, themeConfig } = useAppConfig();
   const pingSeries = useNodePingHistory(node.uuid, !!stats);
-  const livePingLatency = getBestPingLatency(stats?.ping);
+  const pingPreferredLine = pickPingLine(themeConfig.ping_lines);
+  const livePingLatency =
+    getPingLatencyByName(stats?.ping, pingPreferredLine) ?? getBestPingLatency(stats?.ping);
   const headRemarkChips = buildTagChips(node.tags, node.public_remark);
   const headPrivateChips = isLoggedIn ? splitPrivateRemarkTags(node.remark) : [];
   const headExpiryVisible = isLoggedIn && node.price !== -1 && !!getExpiryStatus(node.expired_at, node.expires_in);

@@ -8,6 +8,7 @@ export interface ThemeConfig {
   enable_uptime: boolean;
   /** Fleet asset / billing statistics panel in grid & table views. */
   enable_asset_stats: boolean;
+  ping_lines: string;
   default_theme: 'lumina' | 'deepspace' | 'clean' | 'auto';
   custom_footer: string;
   enable_privacy_mode: boolean;
@@ -33,7 +34,8 @@ const defaultThemeConfig: ThemeConfig = {
   default_view: 'globe',
   enable_globe: true,
   enable_uptime: true,
-  enable_asset_stats: false,
+  enable_asset_stats: true,
+  ping_lines: '',
   default_theme: 'clean',
   custom_footer: '',
   enable_privacy_mode: false,
@@ -205,7 +207,8 @@ export function parseThemeConfigFromPublicSettings(
   if (typeof gms === 'string' && ['rich', 'calm', 'lite'].includes(gms)) {
     tc.globe_marker_style = gms as ThemeConfig['globe_marker_style'];
   }
-
+  const pl = pick('ping_lines');
+  if (typeof pl === 'string') tc.ping_lines = pl;
   // Fallback: if default_view references a disabled view, pick first available
   if ((tc.default_view === 'globe' && !tc.enable_globe) ||
       (tc.default_view === 'uptime' && !tc.enable_uptime)) {
