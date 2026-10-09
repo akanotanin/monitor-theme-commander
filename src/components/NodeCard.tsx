@@ -1,12 +1,14 @@
 import { Sparkline } from './Sparkline';
 import { useMemo, memo } from 'react';
+import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
-import { AlertTriangle, ArrowUp, ArrowDown, Activity, Clock, Network, Signal } from 'lucide-react';
+import { AlertTriangle, ArrowUp, ArrowDown, Activity, Clock, Network, Signal, Lock } from 'lucide-react';
 import { SystemIcon } from '@/lib/systemIcon';
 import type { NodeWithStatus } from '@/services/api';
 import { getBestPingLatency } from '@/services/api';
 import { useRecentStats } from '@/hooks/useRecentStats';
+import { useChipsFit } from '@/hooks/useChipsFit';
 import { formatBytes, formatSpeed, formatUptime, getUsageStatus, calcTrafficUsage, formatTrafficType, getExpiryStatus, formatExpiry, cn } from '@/lib/utils';
 import type { TrafficLimitType } from '@/lib/utils';
 import { useAppConfig } from '@/hooks/useAppConfig';
@@ -14,8 +16,16 @@ import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip';
 import { RegionFlag } from './RegionFlag';
 import { TagPill } from './TagPill';
 import { OfflineNodeState } from './OfflineNodeState';
-import { buildTagChips } from '@/lib/parseTags';
+import { buildTagChips, splitPrivateRemarkTags, type TagColor } from '@/lib/parseTags';
 import dayjs from 'dayjs';
+
+/** 卡片标签行芯片项：分组 / 到期 / 公开备注 / 私有备注 / 隐藏徽标。 */
+type CardChipItem = {
+  key: string;
+  label: string;
+  kind: 'group' | 'expiry' | 'remark' | 'private' | 'hidden';
+  color?: TagColor | null;
+};
 
 interface NodeCardProps {
   node: NodeWithStatus;
@@ -330,6 +340,73 @@ export const NodeCard = memo(function NodeCard({ node }: NodeCardProps) {
   const priceLabel =
     node.price === -1 ? t('label.free') : node.price === 0 ? t('label.notSet') : `${node.currency}${node.price}`;
 
+  const privateChips = isLoggedIn ? splitPrivateRemarkTags(node.remark) : [];
+  const cardChips: CardChipItem[] = [
+    ...(node.group ? [{ key: `grp-${node.group}`, label: node.group, kind: 'group' as const }] : []),
+    ...(expiryStatus ? [{ key: `exp-${node.expired_at}`, label: formatExpiry(node.expired_at, node.expires_in), kind: 'expiry' as const }] : []),
+    ...chipItems.map((chip, i) => ({ key: `rem-${i}-${chip.label}`, label: chip.label, kind: 'remark' as const, color: chip.color })),
+    ...privateChips.map((text, i) => ({ key: `prv-${i}-${text}`, label: text, kind: 'private' as const })),
+    ...(node.hidden ? [{ key: 'hidden', label: t('node.hidden'), kind: 'hidden' as const }] : []),
+  ];
+  const { rowRef: cardRowRef, measureRef: cardMeasureRef, fitCount: cardFitCount } = useChipsFit();
+
+  const renderCardChip = (item: CardChipItem) => {
+    let inner: ReactNode;
+    if (item.kind === 'group') {
+      inner = <span className="text-xs font-mono text-primary/80 bg-primary/15 px-1.5 py-0.5 rounded-sm">{item.label}</span>;
+    } else if (item.kind === 'expiry') {
+      inner = (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span className={cn(
+              'text-xxs font-mono px-1.5 py-0.5 rounded-sm cursor-default shrink-0',
+              expiryStatus === 'expired'
+                ? 'text-destructive/85 bg-destructive/15'
+                : expiryStatus === 'warning'
+                  ? 'text-warning/85 bg-warning/15'
+                  : 'text-muted-foreground/55 bg-muted/35',
+            )}>
+              {formatExpiry(node.expired_at, node.expires_in)}
+            </span>
+          </TooltipTrigger>
+          <TooltipContent side="bottom" className="whitespace-pre-line text-xs font-mono">
+            {isLoggedIn
+              ? t('label.expiryTooltipDetail', {
+                  date: dayjs(node.expired_at).format('YYYY-MM-DD HH:mm'),
+                  cycle: node.billing_cycle ?? '-',
+                  renewal: node.auto_renewal ? t('label.yes') : t('label.no'),
+                  price: priceLabel,
+                })
+              : t('label.expiryTooltip', {
+                  date: dayjs(node.expired_at).format('YYYY-MM-DD HH:mm'),
+                })
+            }
+          </TooltipContent>
+        </Tooltip>
+      );
+    } else if (item.kind === 'remark') {
+      inner = <TagPill label={item.label} color={item.color ?? null} size="sm" className="inline-block max-w-[9rem] truncate" />;
+    } else if (item.kind === 'private') {
+      inner = (
+        <span
+          data-private-remark
+          title={t('label.privateRemarkTip', { text: item.label })}
+          className="inline-flex items-center gap-1 text-xs font-mono text-muted-foreground border border-border/60 px-1.5 py-0.5 rounded-sm max-w-[9rem]"
+        >
+          <Lock className="h-3 w-3 shrink-0" aria-hidden />
+          <span className="truncate">{item.label}</span>
+        </span>
+      );
+    } else {
+      inner = <span className="text-xs font-mono text-warning/80 bg-warning/15 px-1.5 py-0.5 rounded-sm">{item.label}</span>;
+    }
+    return (
+      <span key={item.key} data-chip-key={item.key} className="flex items-center shrink-0">
+        {inner}
+      </span>
+    );
+  };
+
   return (
     <div className={cn(
       'node-card-commander group relative flex h-full flex-col overflow-hidden rounded-lg border bg-card/80 backdrop-blur-xl transition-all duration-300',
@@ -379,72 +456,30 @@ export const NodeCard = memo(function NodeCard({ node }: NodeCardProps) {
               </div>
             )}
           </div>
-          {/* Tags row */}
-          <div className="flex items-center gap-1.5 sm:gap-2 ml-0 sm:ml-4 flex-wrap">
-            {node.group && (
-              <span className="text-xs font-mono text-primary/80 bg-primary/15 px-1.5 py-0.5 rounded-sm">
-                {node.group}
-              </span>
-            )}
-            {chipItems.slice(0, 5).map((tag, i) => (
-              <TagPill
-                key={i}
-                label={tag.label}
-                color={tag.color}
-                size="sm"
-                className={tag.isRemark ? 'inline-block max-w-full truncate' : undefined}
-              />
-            ))}
-            {chipItems.length > 5 && (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <span className="text-xs font-mono text-muted-foreground/60 bg-muted/40 px-1.5 py-0.5 rounded-sm cursor-default">
-                    +{chipItems.length - 5}
-                  </span>
-                </TooltipTrigger>
-                <TooltipContent side="bottom" className="text-xs font-mono">
-                  {chipItems.slice(5).map(t => t.label).join(', ')}
-                </TooltipContent>
-              </Tooltip>
-            )}
-            {node.hidden && (
-              <span className="text-xs font-mono text-warning/80 bg-warning/15 px-1.5 py-0.5 rounded-sm">
-                {t('node.hidden')}
-              </span>
-            )}
-            {(() => {
-              if (!expiryStatus) return null;
-              return (
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <span className={cn(
-                      'text-xxs font-mono px-1.5 py-0.5 rounded-sm cursor-default shrink-0',
-                      expiryStatus === 'expired'
-                        ? 'text-destructive/85 bg-destructive/15'
-                        : expiryStatus === 'warning'
-                          ? 'text-warning/85 bg-warning/15'
-                          : 'text-muted-foreground/55 bg-muted/35',
-                    )}>
-                      {formatExpiry(node.expired_at, node.expires_in)}
-                    </span>
-                  </TooltipTrigger>
-                  <TooltipContent side="bottom" className="whitespace-pre-line text-xs font-mono">
-                    {isLoggedIn
-                      ? t('label.expiryTooltipDetail', {
-                          date: dayjs(node.expired_at).format('YYYY-MM-DD HH:mm'),
-                          cycle: node.billing_cycle ?? '-',
-                          renewal: node.auto_renewal ? t('label.yes') : t('label.no'),
-                          price: priceLabel,
-                        })
-                      : t('label.expiryTooltip', {
-                          date: dayjs(node.expired_at).format('YYYY-MM-DD HH:mm'),
-                        })
-                    }
-                  </TooltipContent>
-                </Tooltip>
-              );
-            })()}
-          </div>
+          {/* Tags row: 分组 + 到期 + 备注（公开/私有）— 单行，放不下的折进 +N 悬浮层 */}
+          {cardChips.length > 0 && (
+            <div className="relative min-w-0 ml-0 sm:ml-4">
+              <div ref={cardRowRef} data-accent="cardchips" className="flex items-center gap-1.5 sm:gap-2 overflow-hidden whitespace-nowrap">
+                {cardChips.slice(0, cardFitCount).map(renderCardChip)}
+                {cardChips.length > cardFitCount && (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <span className="text-xs font-mono text-muted-foreground/60 bg-muted/40 px-1.5 py-0.5 rounded-sm cursor-default shrink-0">
+                        +{cardChips.length - cardFitCount}
+                      </span>
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom" className="whitespace-pre-line text-xs font-mono max-w-xs">
+                      {cardChips.slice(cardFitCount).map(item => item.label).join('\n')}
+                    </TooltipContent>
+                  </Tooltip>
+                )}
+              </div>
+              {/* 量宽用的隐形行：内容与真行一致，不参与布局 */}
+              <div ref={cardMeasureRef} aria-hidden className="invisible pointer-events-none absolute left-0 right-0 top-0 flex items-center gap-1.5 sm:gap-2 overflow-hidden whitespace-nowrap">
+                {cardChips.map(renderCardChip)}
+              </div>
+            </div>
+          )}
           {/* System info row */}
           {(node.os || node.arch) && (
             <Tooltip>

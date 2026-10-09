@@ -196,7 +196,7 @@ try {
   const flagInfo = JSON.parse(await session.evaluate(`(() => {
     const flags = [...document.querySelectorAll('.node-card-commander .fi')]
     const codes = [...new Set(flags.map(f => [...f.classList].find(c => /^fi-[a-z]{2}$/.test(c)) || '?'))]
-    const chips = [...document.querySelectorAll('.node-card-commander .tag-pill-neutral')].map(c => (c.textContent || '').trim())
+    const chips = [...document.querySelectorAll('.node-card-commander [data-accent="cardchips"] .tag-pill-neutral')].map(c => (c.textContent || '').trim())
     const res = performance.getEntriesByType('resource').filter(r => r.name.includes('/flags/'))
     return JSON.stringify({ flags: flags.length, codes, chips: [...new Set(chips)], flagAssets: res.length })
   })()`))
@@ -322,6 +322,37 @@ finally {
     await priv.waitFor(`document.querySelectorAll('.node-card-commander').length > 0 || !!document.querySelector('.globe-top-strip')`, 60000)
     await priv.evaluate(`(() => { const b = [...document.querySelectorAll('button')].find(x => x.innerText.trim() === '卡片'); if (b) b.click(); return !!b })()`)
     await priv.waitFor(`document.querySelectorAll('.node-card-commander').length > 0`, 30000)
+    // 卡片标签行：单行 + 到期在所有备注之前 + 私有备注（可见或折进 +N 浮层）
+    const cardRowInfo = JSON.parse(await priv.evaluate(`(() => {
+      const row = document.querySelector('.node-card-commander [data-accent="cardchips"]')
+      if (!row) return JSON.stringify({ ok: false })
+      const cs = getComputedStyle(row)
+      const texts = [...row.querySelectorAll('[data-chip-key]')].map(e => (e.innerText || '').trim())
+      return JSON.stringify({ ok: true, nowrap: cs.flexWrap === 'nowrap', clip: cs.overflowX === 'hidden', texts })
+    })()`))
+    check('卡片标签行单行（不换行 + 溢出裁切）', cardRowInfo.ok === true && cardRowInfo.nowrap === true && cardRowInfo.clip === true, JSON.stringify(cardRowInfo).slice(0, 140))
+    const expIdx = cardRowInfo.ok ? cardRowInfo.texts.findIndex(x => x.includes('left')) : -1
+    const remIdx = cardRowInfo.ok ? cardRowInfo.texts.findIndex(x => x.includes('CN2 GIA')) : -1
+    check('卡片到期时间在所有备注之前', expIdx !== -1 && remIdx !== -1 && expIdx < remIdx, `exp@${expIdx} rem@${remIdx} [${cardRowInfo.texts.join(' / ')}]`)
+    const privVisible = await priv.evaluate(`document.querySelectorAll('.node-card-commander [data-accent="cardchips"] [data-private-remark]').length`)
+    let privInOverflow = false
+    if (privVisible === 0) {
+      const hasPlus = await priv.evaluate(`(() => {
+        const row = document.querySelector('.node-card-commander [data-accent="cardchips"]')
+        const plus = row ? [...row.children].find(e => (e.innerText || '').startsWith('+')) : null
+        if (!plus) return false
+        const r = plus.getBoundingClientRect()
+        window.__plusBox = { x: r.x + r.width / 2, y: r.y + r.height / 2 }
+        return true
+      })()`)
+      if (hasPlus) {
+        const box = JSON.parse(await priv.evaluate(`JSON.stringify(window.__plusBox)`))
+        await priv.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: box.x, y: box.y })
+        await priv.waitFor(`document.body.innerText.includes('仅管理员可见的测试备注')`, 8000)
+        privInOverflow = await priv.evaluate(`document.body.innerText.includes('仅管理员可见的测试备注')`)
+      }
+    }
+    check('卡片显示私有备注（可见或折进 +N 浮层）', privVisible > 0 || privInOverflow === true, `visible=${privVisible} overflow=${privInOverflow}`)
     await clickSelector(priv, '.node-card-commander .node-name')
     await priv.waitFor(`!!document.querySelector('.node-info-panel')`, 20000)
     const privInfo = JSON.parse(await priv.evaluate(`(() => {
