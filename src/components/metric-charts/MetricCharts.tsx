@@ -123,7 +123,7 @@ export function SystemLoadLineChart({
     return <EmptyChart>{emptyContent ?? <span className="text-xs font-mono text-muted-foreground">{t('chart.noData')}</span>}</EmptyChart>;
   }
 
-  // 历史档没有负载序列（Hub 不存）——给「无历史数据」提示，不画一张空网格
+  // 负载序列 Hub 不存（1.4.1 也没有）——给「无历史数据」提示，不画一张空网格
   if (!chartData.some(p => Number.isFinite(p.load))) {
     return <EmptyChart>{emptyContent ?? <span className="text-xs font-mono text-muted-foreground">{t('chart.noHistory')}</span>}</EmptyChart>;
   }
@@ -275,7 +275,7 @@ export function ConnectionsLineChart({
     return <EmptyChart>{emptyContent ?? <span className="text-xs font-mono text-muted-foreground">{t('chart.noData')}</span>}</EmptyChart>;
   }
 
-  // 历史档没有连接数序列（Hub 不存）——给提示，不画空网格
+  // 连接数序列：hub 1.4.1 起历史行带 tcp/udp——有数据就画；旧版 hub 整窗都没有，才给提示
   if (!chartData.some(p => Number.isFinite(p.connections) || Number.isFinite(p.connections_udp))) {
     return <EmptyChart>{emptyContent ?? <span className="text-xs font-mono text-muted-foreground">{t('chart.noHistory')}</span>}</EmptyChart>;
   }
@@ -332,7 +332,7 @@ export function ProcessLineChart({
     return <EmptyChart>{emptyContent ?? <span className="text-xs font-mono text-muted-foreground">{t('chart.noData')}</span>}</EmptyChart>;
   }
 
-  // 历史档没有进程数序列（Hub 不存）——给提示，不画空网格
+  // 进程数序列：hub 1.4.1 起历史行带 procs——有数据就画；旧版 hub 整窗都没有，才给提示
   if (!chartData.some(p => Number.isFinite(p.process))) {
     return <EmptyChart>{emptyContent ?? <span className="text-xs font-mono text-muted-foreground">{t('chart.noHistory')}</span>}</EmptyChart>;
   }
@@ -451,8 +451,8 @@ export function NetworkTrafficAreaChart({
 
 /**
  * 网络折线图：与 NetworkTrafficAreaChart 同一组序列（上下行速率），供弹窗的「网络」页签使用。
- * 上游把「网络」与「连接」接成了同一张连接数图；Monitor 有网络历史、没有连接数历史，
- * 所以这一支改画速率曲线（见 ChartModal 的映射与 README「与原版的差异」）。
+ * 上游把「网络」与「连接」接成了同一张连接数图；Monitor 的网络档一直是速率序列，
+ * 这一支因此改画速率曲线（连接数有自己的「连接」页签；hub 1.4.1 起该页签的历史档也有数据）。
  */
 export function NetworkTrafficLineChart({
   chartData,

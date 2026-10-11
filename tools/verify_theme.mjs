@@ -12,7 +12,7 @@
 //   ⑥ 表格 / 可用性视图能切换并渲染
 //   ⑦ 点开节点详情页能渲染硬件面板与图表（无历史序列显示「无历史数据」）
 //   ⑧ 390 宽无横向溢出、控制台无错误
-//   ⑨ 图表弹窗：网络页签画出速率曲线；负载/连接页签显示「无历史数据」
+//   ⑨ 图表弹窗：网络页签画出速率曲线；负载页签显示「无历史数据」（连接页签按 hub 是否提供连接数历史而定）
 //   ⑩ 私有备注（打桩登录态）渲染为带锁小卡片；表格备注行按惯例（到期前置 + 私有芯片 + 芯片浮层）
 //   ⑫ 图表弹窗页签顺序（ping 第一位、负载最后）与默认页签
 //   ⑬ 卡片右上角打开图表按钮
@@ -65,6 +65,23 @@ async function clickViewTab(session, label) {
 }
 
 mkdirSync('shots', { recursive: true })
+
+// hub 是否在历史行里提供连接数（tcp/udp）——hub 1.4.1 起有、旧 hub 没有。
+// 「连接」页签与详情页历史档的期望值按它分支，别再写死「无历史数据」（换一台 hub 跑就假红）。
+const hubConnHistory = await (async () => {
+  try {
+    const fleet = await (await fetch(`${BASE}/api/nodes`)).json()
+    const id = fleet?.nodes?.[0]?.id
+    if (id == null)
+      return false
+    const rows = await (await fetch(`${BASE}/api/nodes/${id}/metrics?hours=1&points=2&series=metrics`)).json()
+    return !!rows?.metrics?.[0] && 'tcp' in rows.metrics[0]
+  }
+  catch {
+    return false
+  }
+})()
+console.log(`    （hub 连接数历史：${hubConnHistory ? '有（1.4.1+）' : '无（旧 hub）'}）`)
 
 const session = await openSession({ width: 1440, height: 1000 })
 try {
@@ -180,8 +197,16 @@ try {
   await session.screenshot('shots/modal-load.png')
   check('弹窗能点「连接」页签', await clickModalTab('连接') === true)
   await sleep(600)
-  const connEmpty = await session.evaluate(`document.querySelector('.chart-card-commander')?.innerText.includes('无历史数据') === true`)
-  check('弹窗「连接」页签显示「无历史数据」', connEmpty === true)
+  const connInfo = JSON.parse(await session.evaluate(`(() => {
+    const modal = document.querySelector('.chart-card-commander')
+    if (!modal) return JSON.stringify({ ok: false })
+    const paths = [...modal.querySelectorAll('.recharts-surface path')].filter(p => (p.getAttribute('d') || '').length > 100).length
+    return JSON.stringify({ ok: true, noHistory: modal.innerText.includes('无历史数据'), paths })
+  })()`))
+  if (hubConnHistory)
+    check('弹窗「连接」页签画出连接数历史（hub 1.4.1+）', connInfo.ok === true && connInfo.noHistory === false && connInfo.paths >= 1, JSON.stringify(connInfo))
+  else
+    check('弹窗「连接」页签显示「无历史数据」（旧 hub 没有连接数历史）', connInfo.ok === true && connInfo.noHistory === true, JSON.stringify(connInfo))
   await session.evaluate(`(() => {
     const b = document.querySelector('.chart-card-commander button[aria-label="关闭"]')
     if (b) { b.click(); return true }
@@ -290,7 +315,9 @@ try {
   check('详情页能切到历史档（1天）', switched === true)
   const noHistorySeen = await session.waitFor(`document.body.innerText.includes('无历史数据')`, 20000)
   const noHistoryCount = await session.evaluate(`(document.body.innerText.match(/无历史数据/g) || []).length`)
-  check('历史档无序列的图表显示「无历史数据」', noHistorySeen === true && noHistoryCount >= 3, `实际 ${noHistoryCount} 处`)
+  // 负载始终无历史序列；连接 / 进程数旧 hub 没有、1.4.1 起有——按 hub 能力定下限
+  const minNoHistory = hubConnHistory ? 1 : 3
+  check(`历史档无序列的图表显示「无历史数据」（≥${minNoHistory} 处）`, noHistorySeen === true && noHistoryCount >= minNoHistory, `实际 ${noHistoryCount} 处`)
   await session.evaluate(`(() => { const el = document.querySelector('.chart-card-commander'); if (el) { el.scrollIntoView({ block: 'start' }); return true } return false })()`)
   await sleep(400)
   await session.screenshot('shots/desktop-detail-history.png')

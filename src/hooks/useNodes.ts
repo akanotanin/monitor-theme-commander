@@ -202,9 +202,8 @@ export function useNodes() {
     //
     // Skip the request when the page is hidden — the user can't see anything
     // anyway, and on tabs left open in the background this single change
-    // takes the network/CPU floor of this hook close to zero. The next
-    // visible tick will resync state because the WebSocket is still
-    // connected and the next `send('get')` will deliver fresh stats.
+    // takes the network/CPU floor of this hook close to zero. 回到前台时由
+    // 下面的 visibilitychange 监听立刻补一次（那时 WS 也刚被 transport 层接回来）。
     const intervalId = setInterval(() => {
       if (document.hidden) return;
       wsService.send('get');
@@ -216,6 +215,18 @@ export function useNodes() {
       unsubscribe();
       // Don't disconnect WebSocket here, as other components may also need it
     };
+  }, []);
+
+  // 回到前台立刻补一次实时状态（hub 1.4.0 适配清单第④条）：
+  // 藏起来那段 WS 被 transport 层关掉、轮询也停着，这一下把数据补齐；
+  // WS 那条连接由 transport 层自己按可见性收放，这里只负责数据。
+  useEffect(() => {
+    const onVisibilityChange = () => {
+      if (document.hidden) return;
+      wsService.refreshNow();
+    };
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', onVisibilityChange);
   }, []);
 
   // Get details for a specific node

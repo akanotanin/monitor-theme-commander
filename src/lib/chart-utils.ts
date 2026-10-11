@@ -113,11 +113,13 @@ export function transformLoadRecords(records: LoadRecord[]): ChartDataPoint[] {
       time: new Date(r.time).toISOString(),
       cpu: Math.min(Math.max(r.cpu || 0, 0), 100),
       ram: Math.min(Math.max(r.ram_total ? (r.ram / r.ram_total) * 100 : 0, 0), 100),
-      // 交换分区：历史档没有 swap 序列（Hub 不存）——同样缺就是缺，不画贴 0 的假线
-      swap: r.swap_total ? Math.min(Math.max((r.swap / r.swap_total) * 100, 0), 100) : undefined,
+      // 交换分区：hub 1.4.1 起历史行带 swap_used（桶内均值）——按机器当前 swap_total 画成百分比；
+      // 旧版 hub 没有这个键、或机器根本没有 swap（swap_total=0）时不画——缺就是缺，不画贴 0 的假线
+      swap: r.swap_total && Number.isFinite(r.swap) ? Math.min(Math.max((r.swap / r.swap_total) * 100, 0), 100) : undefined,
       disk: Math.min(Math.max(r.disk_total ? (r.disk / r.disk_total) * 100 : 0, 0), 100),
       load: r.load,
-      // 缺就是缺（历史档没有进程数序列）——不要用 0 顶替，图表层会画成「无历史数据」而不是贴着 0 的假线
+      // 进程数 / 连接数：hub 1.4.1 起历史行带 procs / tcp / udp——读到了就画；
+      // 旧版 hub 缺这几个键（undefined），图表层会画「无历史数据」而不是贴着 0 的假线
       process: r.process,
       connections: r.connections,
       connections_udp: r.connections_udp,

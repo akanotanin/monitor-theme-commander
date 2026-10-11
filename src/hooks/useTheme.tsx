@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState, useMemo, type ReactNode } from 'react';
-import { getCommanderLogoDataUri } from '@/lib/commanderLogo';
+import { storageRemove, storageSet } from '@/lib/safe-storage';
 
 /** Visual themes that map to actual CSS styling */
 export type VisualTheme = 'lumina' | 'deepspace' | 'clean';
@@ -90,20 +90,19 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     }
     meta.setAttribute('content', themeColor);
 
-    const logoHref = getCommanderLogoDataUri(resolvedTheme);
-    document.querySelectorAll<HTMLLinkElement>('link[rel~="icon"]').forEach((link) => {
-      link.href = logoHref;
-      link.type = 'image/svg+xml';
-    });
+    /**
+     * 标签页图标：**不在这里改**。
+     * hub 1.4.0 起由面板「设置 → 站点图标」管 —— 站长设了就用它，没设时按
+     * index.html 里那两个固定地址回落到主题自带的 `public/favicon.svg` /
+     * `public/apple-touch-icon.png`（hub 会给地址带上内容版本号）。
+     * 旧版本这里会把所有 `<link rel="icon">` 改写成 Commander 字标的 data URI，
+     * 那样站长换的站点图标永远出不来 —— 随 hub 1.4.x 适配一并移除。
+     */
 
-    // Persist preference
-    localStorage.setItem(STORAGE_KEY, theme);
+    // Persist preference（浏览器禁用站点数据时写入会抛 SecurityError，走安全封装）
+    storageSet(STORAGE_KEY, theme);
 
-    try {
-      localStorage.removeItem('komari-theme');
-    } catch {
-      // ignore
-    }
+    storageRemove('komari-theme');
   }, [theme, resolvedTheme]);
 
   // Toggle a root attribute when the page is hidden so a global CSS rule

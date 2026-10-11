@@ -207,21 +207,39 @@ function toIso(ts: number): string {
 }
 
 /**
+ * 数值字段：Hub 未提供的保持 undefined（旧版 Hub 的历史行没有这些键），
+ * 0 是有效数据，不参与「缺就是缺」的判断。
+ */
+function optionalNumber(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) ? value : undefined
+}
+
+/**
  * 一条历史负载记录。
- * Monitor 的历史只保留 cpu / 内存 / 磁盘 / 网络，swap、负载、连接数、进程数
- * 这类字段没有历史序列 —— 这里刻意不补 0，让图表画成空档而不是贴着 0 的假线。
+ * Hub 1.4.1 起，历史行里还带 swap_used / tcp / udp / procs（桶内均值、计数取整）——
+ * Swap 曲线、连接数曲线与进程数曲线的历史档因此能真的画出来；负载（load）仍没有历史序列。
+ * 旧版 Hub 没有这几个键：读不到就保持 undefined，图表层会画「无历史数据」，
+ * 而不是用 0 顶替、贴着 0 画一条假线。
  */
 function loadRecord(node: MonitorNode, point: HistoryWindow['metrics'][number]): RPC2StatusRecord {
+  const live = node.metrics
   return {
     client: String(node.id),
     time: toIso(point.ts),
     cpu: point.cpu,
     ram: point.mem_used,
-    ram_total: node.metrics?.mem_total ?? node.mem_total,
+    ram_total: live?.mem_total ?? node.mem_total,
+    // swap 按「已用量 ÷ 机器当前 swap_total」画成百分比；swap_total 为 0 的机器图表层自然不画
+    swap: optionalNumber(point.swap_used),
+    swap_total: live?.swap_total ?? node.swap_total,
     disk: point.disk_used,
-    disk_total: node.metrics?.disk_total ?? node.disk_total,
+    disk_total: live?.disk_total ?? node.disk_total,
     net_in: point.net_rx,
     net_out: point.net_tx,
+    // 连接数按 TCP / UDP 分开给，与实时档 splitReportedConnections 之后的口径一致
+    connections: optionalNumber(point.tcp),
+    connections_udp: optionalNumber(point.udp),
+    process: optionalNumber(point.procs),
   } as unknown as RPC2StatusRecord
 }
 
@@ -545,11 +563,25 @@ export interface LiveOptions {
   onSocket?: (socket: WebSocket | null) => void
   retryInterval?: number
   maxRetries?: number
+  /** 快试用尽后的慢速重试间隔（hub 满载时握手回 503，隔一段时间再试，但不放弃） */
+  slowRetryInterval?: number
+}
+
+/** 作废快照的新鲜度（切回前台时调用：不吃 WS 的 6 秒新鲜度缓存，立刻重新拉一次） */
+export function invalidateSnapshot(): void {
+  received = 0
 }
 
 /**
  * 订阅 /api/ws 的节点快照（Hub 约每 2 秒推一帧）
- * 连接失败会自动重连；主题侧另有 HTTP 轮询兜底，因此这里不做无限重试
+ *
+ * 连接失败自动重连：先按 retryInterval 快试 maxRetries 次，之后按 slowRetryInterval
+ * 一直慢试 —— hub 的匿名推送满 1000 条时握手会回 503（1.4.1 release note），
+ * 数据由主题的 HTTP 轮询兜底，WS 隔一段时间再试而不是彻底放弃。
+ *
+ * 后台标签页不再白养这条连接（hub 1.4.0 适配清单第④条）：藏起来就关掉这条连接并停掉
+ * 一切重试（反代按 IP 限并发 WS，一堆后台标签页会互相挤自己的名额）；回到前台立刻接回来。
+ * 挂载时若页面本来就是隐藏的（中键开一堆链接），连第一条都不建。
  */
 export function connectLive(options: LiveOptions): LiveHandle {
   // 非浏览器环境（单元测试 / SSR）：不做连接，静默保持断开状态
@@ -560,45 +592,51 @@ export function connectLive(options: LiveOptions): LiveHandle {
 
   const retryInterval = options.retryInterval ?? 3000
   const maxRetries = options.maxRetries ?? 5
+  const slowRetryInterval = options.slowRetryInterval ?? 15000
   let socket: WebSocket | null = null
   let timer: ReturnType<typeof setTimeout> | null = null
   let attempts = 0
   let closed = false
+  let visible = typeof document === 'undefined' || document.visibilityState !== 'hidden'
 
   const url = new URL(`${API_BASE}/ws`, location.href)
   url.protocol = location.protocol === 'https:' ? 'wss:' : 'ws:'
 
   const scheduleRetry = () => {
-    if (closed)
+    if (closed || !visible)
       return
-    if (attempts >= maxRetries) {
-      liveUp = false
-      options.onState('disconnected')
-      return
-    }
     attempts += 1
-    options.onState('reconnecting')
-    timer = setTimeout(connect, retryInterval)
+    // 快试用尽后进入慢速档：状态栏落到「离线」（数据仍由轮询兜底），但仍在后台继续试
+    const fast = attempts <= maxRetries
+    options.onState(fast ? 'reconnecting' : 'disconnected')
+    timer = setTimeout(connect, fast ? retryInterval : slowRetryInterval)
   }
 
   function connect(): void {
-    if (closed)
+    if (closed || !visible)
       return
     options.onState('connecting')
+    let ws: WebSocket
     try {
-      socket = new WebSocket(url)
+      ws = new WebSocket(url)
     }
     catch {
       scheduleRetry()
       return
     }
-    options.onSocket?.(socket)
-    socket.onopen = () => {
+    socket = ws
+    options.onSocket?.(ws)
+    ws.onopen = () => {
+      if (socket !== ws)
+        return
       attempts = 0
       liveUp = true
       options.onState('connected')
     }
-    socket.onmessage = (event) => {
+    ws.onmessage = (event) => {
+      // 重连换代之后，旧连接迟到的帧不算数
+      if (socket !== ws)
+        return
       try {
         const frame = JSON.parse(event.data as string) as MonitorFrame
         if (Array.isArray(frame?.nodes)) {
@@ -610,25 +648,65 @@ export function connectLive(options: LiveOptions): LiveHandle {
         // 忽略无法解析的帧
       }
     }
-    socket.onerror = () => {
+    ws.onerror = () => {
+      if (socket !== ws)
+        return
       liveUp = false
       options.onState('reconnecting')
     }
-    socket.onclose = () => {
+    ws.onclose = () => {
+      if (socket !== ws)
+        return
       liveUp = false
       socket = null
       options.onSocket?.(null)
-      if (!closed)
-        scheduleRetry()
+      scheduleRetry()
     }
   }
 
-  connect()
+  /** 切前台 / 后台：后台让出连接，回前台立刻接回来（新连接的帧与旧连接迟到的帧靠 socket !== ws 区分） */
+  const onVisibilityChange = () => {
+    const next = typeof document === 'undefined' || document.visibilityState !== 'hidden'
+    if (next === visible)
+      return
+    visible = next
+    if (visible) {
+      attempts = 0
+      if (!socket || socket.readyState > WebSocket.OPEN)
+        connect()
+    }
+    else {
+      // 藏起来：关掉连接并停掉重试；它自己那条 onclose 不会挂回来（socket 已换成 null）
+      if (timer) {
+        clearTimeout(timer)
+        timer = null
+      }
+      if (socket) {
+        const ws = socket
+        socket = null
+        ws.onopen = null
+        ws.onmessage = null
+        ws.onerror = null
+        ws.onclose = null
+        try { ws.close() } catch { /* 已断开 */ }
+        options.onSocket?.(null)
+      }
+      liveUp = false
+    }
+  }
+  if (typeof document !== 'undefined')
+    document.addEventListener('visibilitychange', onVisibilityChange)
+
+  // 后台标签页连第一条都不建：等它真的露脸再补
+  if (visible)
+    connect()
 
   return {
     close() {
       closed = true
       liveUp = false
+      if (typeof document !== 'undefined')
+        document.removeEventListener('visibilitychange', onVisibilityChange)
       if (timer)
         clearTimeout(timer)
       timer = null

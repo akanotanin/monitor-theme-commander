@@ -2,6 +2,8 @@
 
 import { rpc2Client } from '@/lib/rpc2';
 import { offlineCache } from '@/lib/offlineCache';
+import { sessionGet, sessionSet } from '@/lib/safe-storage';
+import { invalidateSnapshot } from '@/monitor/transport';
 import type {
   RPC2NodeData,
   RPC2NodeStatus,
@@ -548,15 +550,16 @@ class ApiService {
 
       try {
         let result: Record<string, unknown> | undefined;
-        const cachedSupport = sessionStorage.getItem(PUBLIC_NS_CACHE_KEY);
+        // sessionStorage 也可能被站点数据设置禁掉（读取抛 SecurityError）——统一走安全封装
+        const cachedSupport = sessionGet(PUBLIC_NS_CACHE_KEY);
 
         if (cachedSupport !== 'false') {
           try {
             result = await rpc2Client.call<undefined, Record<string, unknown>>('public:getPublicSettings');
-            sessionStorage.setItem(PUBLIC_NS_CACHE_KEY, 'true');
+            sessionSet(PUBLIC_NS_CACHE_KEY, 'true');
           } catch (error) {
             if (isRpcMethodNotFound(error)) {
-              sessionStorage.setItem(PUBLIC_NS_CACHE_KEY, 'false');
+              sessionSet(PUBLIC_NS_CACHE_KEY, 'false');
               result = await fetchCommon();
             } else {
               throw error;
@@ -768,6 +771,16 @@ export class WebSocketService {
     if (data === 'get') {
       this.fetchLatestStatus();
     }
+  }
+
+  /**
+   * 回到前台时调用：先作废 transport 的快照新鲜度（不吃 WS 那 6 秒的「仍算新鲜」缓存），
+   * 再立刻重新拉一次实时状态 —— 藏起来那段一帧都没收，这一下把数据补齐
+   * （hub 1.4.0 适配清单第④条「回前台先补一次」）。
+   */
+  refreshNow() {
+    invalidateSnapshot();
+    void this.fetchLatestStatus();
   }
 
   subscribe(listener: (data: WsMessage) => void) {

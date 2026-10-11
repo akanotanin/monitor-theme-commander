@@ -9,8 +9,9 @@
 //   pwa-192.png, pwa-512.png      — manifest "any" icons
 //   maskable-512.png              — manifest "maskable" icon (extra safe padding)
 //   apple-touch-icon.png (180)    — iOS home-screen icon (opaque bg)
-//   favicon-16.png / favicon-32.png / favicon.ico — classic favicons
-import { readFile, writeFile } from "node:fs/promises"
+//   apple-touch-icon-precomposed.png — 与上一份同字节（hub 1.4.0 的图标路由会问这条）
+//   favicon-16.png / favicon-32.png / favicon-48.png / favicon.ico — classic favicons
+import { readFile, writeFile, copyFile } from "node:fs/promises"
 import { fileURLToPath } from "node:url"
 import { dirname, resolve } from "node:path"
 import sharp from "sharp"
@@ -54,10 +55,19 @@ await render(192, "pwa-192.png")
 await render(512, "pwa-512.png")
 await renderMaskable()
 await render(180, "apple-touch-icon.png", { background: BG })
+// hub 1.4.0 的图标路由还会问 /apple-touch-icon-precomposed.png（老 iOS 的书签与主屏图标）；
+// 与 apple-touch-icon.png 同一份字节，这里一起生成，免得那一份落下。
+await copyFile(
+  resolve(publicDir, "apple-touch-icon.png"),
+  resolve(publicDir, "apple-touch-icon-precomposed.png"),
+)
+console.log("✓", "apple-touch-icon-precomposed.png")
+await render(48, "favicon-48.png")
 await render(32, "favicon-32.png")
 await render(16, "favicon-16.png")
 
 const ico = await pngToIco([
+  resolve(publicDir, "favicon-48.png"),
   resolve(publicDir, "favicon-32.png"),
   resolve(publicDir, "favicon-16.png"),
 ])

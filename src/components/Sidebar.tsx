@@ -23,6 +23,7 @@ import { Sparkline } from './Sparkline';
 import { useNodePingHistory } from '@/hooks/useNodePingHistory';
 import { useChipsFit } from '@/hooks/useChipsFit';
 import { getBestPingLatency, getPingLatencyByName } from '@/services/api';
+import { storageGet, storageSet } from '@/lib/safe-storage';
 interface SidebarProps {
   nodes: NodeWithStatus[];
   loading?: boolean;
@@ -228,7 +229,7 @@ function NodeListView({
   const { t } = useTranslation();
   const [searchQuery, setSearchQuery] = useState('');
   const [sortByActive, _setSortByActive] = useState(() => {
-    const saved = localStorage.getItem('globeSortByActive');
+    const saved = storageGet('globeSortByActive');
     return saved === null ? true : saved === 'true';
   });
   const skeletonNameWidths = [52, 68, 61, 75, 57, 70, 64, 58];
@@ -236,7 +237,7 @@ function NodeListView({
   const setSortByActive = useCallback((val: boolean | ((prev: boolean) => boolean)) => {
     _setSortByActive(prev => {
       const next = typeof val === 'function' ? val(prev) : val;
-      localStorage.setItem('globeSortByActive', String(next));
+      storageSet('globeSortByActive', String(next));
       return next;
     });
   }, []);

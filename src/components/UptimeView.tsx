@@ -453,6 +453,8 @@ const LazyNodeRow = memo(function LazyNodeRow({
   useEffect(() => {
     if (!isVisible || !fetchedRef.current) return;
     const timer = setInterval(async () => {
+      // 后台标签页不刷：没有可见的抖动要调度，也别白烧流量（hub 1.4.0 适配清单④）
+      if (document.hidden) return;
       if (!_cache || _cache.rangeHours !== rangeHours) return;
       const cached = _cache.nodes.get(node.uuid);
       if (!cached || Date.now() - cached.fetchedAt < NODE_REFRESH_INTERVAL) return;

@@ -1,4 +1,5 @@
 import { createContext, useContext } from 'react';
+import { storageGet } from '@/lib/safe-storage';
 
 export type ViewMode = 'globe' | 'grid' | 'table' | 'uptime';
 
@@ -21,7 +22,7 @@ export function prefetchDashboardView(mode: ViewMode) {
 }
 
 export function getInitialViewMode(): ViewMode {
-  const saved = localStorage.getItem('nodeViewMode');
+  const saved = storageGet('nodeViewMode');
   if (saved === 'globe' || saved === 'grid' || saved === 'table' || saved === 'uptime') return saved;
   return 'globe';
 }

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { Routes, Route, useLocation } from 'react-router-dom';
 import { EffectsOverlay } from '@/components/EffectsOverlay';
 import { Starfield } from '@/components/Starfield';
@@ -19,6 +19,7 @@ import { usePrivacyMode } from '@/hooks/usePrivacyMode';
 import { useSiteMeta } from '@/hooks/useSiteMeta';
 import { useFleetSummary } from '@/hooks/useFleetSummary';
 import { getCommanderLogoDataUri } from '@/lib/commanderLogo';
+import { storageGet, storageSet } from '@/lib/safe-storage';
 import { Dashboard } from '@/pages/Dashboard';
 import { NodeDetailPage } from '@/pages/NodeDetailPage';
 import { NodeNetworkPage } from '@/pages/NodeNetworkPage';
@@ -40,7 +41,7 @@ function App() {
 
   useEffect(() => {
     if (!appConfig.loaded) return;
-    const savedTheme = localStorage.getItem('appearance');
+    const savedTheme = storageGet('appearance');
     if (!savedTheme) {
       setTheme(themeConfig.default_theme);
     }
@@ -62,20 +63,29 @@ function App() {
 
   const handleSetViewMode = useCallback((mode: ViewMode) => {
     setViewMode(mode);
-    localStorage.setItem('nodeViewMode', mode);
+    storageSet('nodeViewMode', mode);
   }, []);
 
+  /** 首访的「默认视图」只应用一次：存储被站点数据设置禁掉时，savedView 永远是 null，
+   *  若每次 viewMode 变化都重放一遍这个分支，访客刚切到卡片就会被顶回默认档。 */
+  const initialViewApplied = useRef(false);
   useEffect(() => {
     if (!appConfig.loaded) return;
-    const savedView = localStorage.getItem('nodeViewMode');
+    const savedView = storageGet('nodeViewMode');
     const isViewEnabled = (v: ViewMode) => {
       if (v === 'globe') return themeConfig.enable_globe;
       if (v === 'uptime') return themeConfig.enable_uptime;
       return true;
     };
-    if (!savedView) {
-      setViewMode(themeConfig.default_view);
-    } else if (!isViewEnabled(viewMode)) {
+    if (!initialViewApplied.current) {
+      initialViewApplied.current = true;
+      if (!savedView) {
+        setViewMode(themeConfig.default_view);
+        return;
+      }
+    }
+    // 只在「当前视图被站长关掉」时回退（存储被禁导致的 savedView 缺失不算）
+    if (!isViewEnabled(viewMode)) {
       handleSetViewMode(themeConfig.default_view);
     }
   }, [

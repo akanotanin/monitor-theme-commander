@@ -14,6 +14,7 @@ import type { VisualTheme } from '@/hooks/useTheme';
 import { useAppConfig } from '@/hooks/useAppConfig';
 import { useIsMobile } from '@/hooks/useIsMobile';
 import { cn } from '@/lib/utils';
+import { storageGet, storageSet } from '@/lib/safe-storage';
 import type { NodeWithStatus } from '@/services/api';
 
 interface GlobeViewProps {
@@ -31,7 +32,7 @@ const GLOBE_AUTO_ROTATE_KEY = 'globeAutoRotate';
 /** User override from the on-page start/stop control. `null` = follow
  *  `theme_settings.globe_mode` from the server. */
 function readAutoRotateOverride(): boolean | null {
-  const saved = localStorage.getItem(GLOBE_AUTO_ROTATE_KEY);
+  const saved = storageGet(GLOBE_AUTO_ROTATE_KEY);
   if (saved === 'true') return true;
   if (saved === 'false') return false;
   return null;
@@ -60,12 +61,12 @@ export function GlobeView({ nodes, loading = false, onViewCharts, hubNodeUuid = 
 
   const startRotation = useCallback(() => {
     setAutoRotateOverride(true);
-    localStorage.setItem(GLOBE_AUTO_ROTATE_KEY, 'true');
+    storageSet(GLOBE_AUTO_ROTATE_KEY, 'true');
   }, []);
 
   const stopRotation = useCallback(() => {
     setAutoRotateOverride(false);
-    localStorage.setItem(GLOBE_AUTO_ROTATE_KEY, 'false');
+    storageSet(GLOBE_AUTO_ROTATE_KEY, 'false');
   }, []);
 
   // Feed enabled on themes with HUD aesthetic. Clean theme stays minimal.

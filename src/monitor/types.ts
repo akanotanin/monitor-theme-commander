@@ -93,6 +93,14 @@ export interface MetricPoint {
   disk_used: number
   net_rx: number
   net_tx: number
+  /**
+   * Hub 1.4.1 起，历史行还带 swap_used / tcp / udp / procs（桶内均值，计数取整）；
+   * 旧版 Hub 没有这几个键 —— 读之前判空（undefined 即「这台 hub 不提供」）。
+   */
+  swap_used?: number
+  tcp?: number
+  udp?: number
+  procs?: number
 }
 
 /** 历史延迟记录 */

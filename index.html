@@ -12,8 +12,12 @@
          current visual theme (lumina/clean → light, deepspace → dark);
          the static value is the deepspace background as a sensible
          pre-hydration default. -->
-    <link rel="icon" href="/favicon.ico" sizes="any" />
-    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <!-- 站点图标：hub 1.4.0 起由面板「设置 → 站点图标」管 —— 站长设了之后这两条路径都由
+         hub 回答（它还会给地址带上内容版本号）；没设时按同名文件回落到主题自带的
+         public/favicon.svg 与 public/apple-touch-icon.png（外加 -precomposed 一份）。
+         主题运行时不再改写 <link>。favicon.ico 不放 <link>：老客户端/书签管理器会直接
+         来要 /favicon.ico，hub 同样提供这条路径（目录里挂着同名文件）。 -->
+    <link rel="icon" href="/favicon.svg" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <link rel="manifest" href="/manifest.webmanifest" />
     <meta name="theme-color" content="#0a0e14" />
